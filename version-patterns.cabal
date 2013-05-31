@@ -1,0 +1,22 @@
+name:                version-patterns
+version:             0.1.0.0
+-- synopsis:            
+-- description:         
+license:             BSD3
+license-file:        LICENSE
+author:              Jason Dagit
+maintainer:          dagit@galois.com
+-- copyright:           
+category:            Language
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable version-patterns
+  main-is:             Main.hs
+  -- other-modules:       
+  build-depends:       base >= 3 && < 5
+                     , shelly
+                     , text
+                     , system-filepath
+  hs-source-dirs:      .
+                     , src
