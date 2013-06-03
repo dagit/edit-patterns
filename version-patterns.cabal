@@ -13,10 +13,17 @@ cabal-version:       >=1.8
 
 executable version-patterns
   main-is:             Main.hs
-  -- other-modules:       
   build-depends:       base >= 3 && < 5
+                     , containers
+                     , mtl
                      , shelly
                      , text
                      , system-filepath
+                     , system-fileio
+                     , aterm
+                     , tree-utils
+                     , zip-archive
+                     , bytestring
+
   hs-source-dirs:      .
                      , src
