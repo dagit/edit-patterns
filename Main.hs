@@ -32,7 +32,7 @@ import qualified Data.Text.Lazy as LT
 default (LT.Text)
 
 -----------------------------------------------------------------------
--- | Option Parsing
+-- * Option Parsing
 data Options = Options
   { optVerbose :: Bool
   , optSandbox :: FilePath
@@ -85,7 +85,7 @@ parseMode _                  = Nothing
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
--- | Git Diff
+-- * Git Diff
 -- Ignore permissons on files:
 -- drivers/char/mmtimer.c /tmp/IV5Cnd_mmtimer.c 58eddfdd3110a3a7168f2b8bdbfabefb9691016a 100644 /tmp/9W7Cnd_mmtimer.c 12006182f575a4f3cd09827bcaaea6523077e7b3 100644
 data GitDiffArgs = GitDiffArgs
@@ -98,7 +98,7 @@ data GitDiffArgs = GitDiffArgs
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
--- | Main program
+-- * Main program
 main :: IO ()
 main = do
   args <- getArgs
@@ -108,11 +108,17 @@ main = do
   shelly $ verbosity $ do
     case optMode opts of
       GenerateATerms  -> generateTerms (optSandbox opts)
-      AntiUnifyATerms -> processTerms  (optSandbox opts) 
+      AntiUnifyATerms -> processTerms  (optSandbox opts)
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
--- | Heavy lifting
+-- * Heavy lifting
+
+-- | generateTerms Assumes that the current working directory is a git repository.
+-- It builds a list of pairs from the history of the repository. Visits each of those
+-- commits and requests the arguments that git-diff would use between those versions.
+-- Then it parses the source code that changed between each revision in the context it was
+-- commited in. The parsed representations are saved as ATerms in a zip archive.
 generateTerms :: FilePath -> Sh ()
 generateTerms sandbox = do
   -- We add "master" so that if the repo is currently at a weird revision or branch, we get
@@ -147,7 +153,7 @@ generateTerms sandbox = do
           -- To properly parse files we need the context that the repository was in
           -- when the commit was made. So we do a checkout. We may also need to
           -- run configure or other commands. We have no support for that yet.
-          voidSh (run "git" ["checkout", commit])
+          void (run "git" ["checkout", commit])
           -------------------------------
           -- Hacks for configuring/building the linux kernel enough to make it
           -- parsable by ROSE
@@ -160,13 +166,12 @@ generateTerms sandbox = do
           -------------------------------
           -- Hacks for configuring/building freetype2 enough to make it
           -- parsable by ROSE
-          voidSh (run "./configure" []) `catchany_sh` (const (return ()))
+          void (run "./configure" []) `catchany_sh` (const (return ()))
           -- End Hacks for the kernel
           -------------------------------
           forM_ gdas $ \gda -> do
             -- We make a point to read/write the achrive each iteration to avoid
             -- losing data from having the run terminate in the middle
-            -- archiveBS <- withFileSh archiveFP ReadMode (\h -> liftIO (BL.hGetContents h))
             archiveBS <- liftIO (B.readFile archiveFP)
             let commitDir   = fromText commit
                 archive     = toArchive archiveBL
@@ -208,7 +213,7 @@ src2term from to = do
   -- For whatever reason, this gcc command gives us an extra newline that is
   -- troublesome, ergo this hack:
   let destFile = "/tmp" </> filename to
-  voidSh (run "/home/dagit/ftt/rose/compileTree/bin/src2term"
+  void (run "/home/dagit/ftt/rose/compileTree/bin/src2term"
                 [ "--aterm", toTextIgnore from, "-o", toTextIgnore destFile
                 , "-Iinclude"
                 , "-Iinclude/freetype"
@@ -305,18 +310,23 @@ antiUnifySh archive gda = do
 
 
 -----------------------------------------------------------------------
--- | Utility Functions
-voidSh :: Sh a -> Sh ()
-voidSh sh = sh >> return ()
+-- * Utility Functions
 
+-- | Lazily pulls a Readable value out of the requested file in the archive.
 readFromArchive :: Read a => Archive -> FilePath -> Maybe a
 readFromArchive archive fp =
   (read . BL.unpack . fromEntry) <$> findEntryByPath (LT.unpack (toTextIgnore fp)) archive
 
+-- | Like the normal withFile except that internally it uses
+-- 'shelly' and 'liftIO' to make the type Sh instead of IO.
 withFileSh :: String -> IOMode -> (Handle -> Sh r) -> Sh r
 withFileSh fp mode f =
   liftIO (bracket (openFile fp mode) hClose (\h -> shelly (f h)))
 
+-- | We make an attempt to be somewhat atomic:
+-- We throw ".tmp" onto the file extension, write to it in chunks
+-- and when the chunks are written we move the file over top of
+-- the requested file name.
 writeFileInChunks :: String -> BL.ByteString -> Sh ()
 writeFileInChunks fp bl = do
   withFileSh (fp++".tmp") WriteMode $ \h -> do
@@ -325,11 +335,9 @@ writeFileInChunks fp bl = do
   mv (fromText (LT.pack (fp++".tmp")))
      (fromText (LT.pack fp))
 
+-- | We're mostly interested in C at the moment, so that means
+-- .c and .h files.
 fileFilter :: LT.Text -> Bool
 fileFilter fp = (".c" `LT.isSuffixOf` fp)
               ||(".h" `LT.isSuffixOf` fp)
-
 -----------------------------------------------------------------------
-
-
-
