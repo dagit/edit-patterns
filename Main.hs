@@ -7,7 +7,6 @@ module Main
 -- External dependencies imports
 import ATerm.AbstractSyntax
 import ATerm.ReadWrite
-import ATerm.Unshared
 import Codec.Archive.Zip
 import Control.Applicative
 import Control.Exception.Base
@@ -15,7 +14,6 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 import Data.String
-import Data.Tree.ATerm
 import Data.Tree.ATerm
 import Data.Tree.AntiUnification
 import Filesystem hiding (writeFile, readFile, withFile, openFile)
@@ -29,7 +27,6 @@ import System.IO hiding (FilePath)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Text.Lazy as LT
-import qualified Data.Text.Lazy.IO as LT
 
 -- Recommended by Shelly
 default (LT.Text)
@@ -105,7 +102,7 @@ data GitDiffArgs = GitDiffArgs
 main :: IO ()
 main = do
   args <- getArgs
-  let (actions, _, errors) = getOpt RequireOrder options args
+  let (actions, _, _) = getOpt RequireOrder options args
   opts <- foldl (>>=) (return defaultOptions) actions
   let verbosity = if optVerbose opts then verbosely else silently
   shelly $ verbosity $ do
@@ -118,18 +115,18 @@ main = do
 -- | Heavy lifting
 generateTerms :: FilePath -> Sh ()
 generateTerms sandbox = do
-  -- We add "master" so that if the repo is currently at a weird revision or branch, we get 
+  -- We add "master" so that if the repo is currently at a weird revision or branch, we get
   -- reasonable view of the history of master.
   cs <- LT.lines <$> run "git" ["log", "master", "--pretty=format:%H", "--reverse"]
   -- TODO: use the full history
   let pairs = {- take 10 -} (zip cs (drop 1 cs))
   -- Log the version pairs for later processing
   mkdir_p sandbox
-  let archive        = versionPairs `addEntryToArchive` emptyArchive
+  let initArchive    = versionPairs `addEntryToArchive` emptyArchive
       versionPairsFP = "version-pairs.hs" :: String
       versionPairs   = toEntry versionPairsFP 0 (BL.pack (show pairs))
       archiveFP      = LT.unpack (toTextIgnore (sandbox </> "version-patterns.zip"))
-  writeFileInChunks archiveFP (fromArchive archive)
+  writeFileInChunks archiveFP (fromArchive initArchive)
 
   forM_ pairs $ \(first,second) -> do
     setenv "GIT_EXTERNAL_DIFF" "echo"
@@ -137,11 +134,11 @@ generateTerms sandbox = do
     -- Git should always return the same information, eg., if this fails something has gone wrong
     -- TODO: what about multiple files? would that generate multiple lines?
     let parseDiffArgs :: [LT.Text] -> GitDiffArgs
-        parseDiffArgs l | length l /= 7         = error ("unexpected output from git diff: " ++ LT.unpack (LT.concat l))
-        parseDiffArgs [fp,before,_,_,after,_,_] = GitDiffArgs { gdaFilePath     = fp
-                                                              , gdaBeforeCommit = first
-                                                              , gdaAfterCommit  = second }
+        parseDiffArgs [fp,_,_,_,_,_,_] = GitDiffArgs { gdaFilePath     = fp
+                                                     , gdaBeforeCommit = first
+                                                     , gdaAfterCommit  = second }
 
+        parseDiffArgs l | otherwise    = error ("unexpected output from git diff: " ++ LT.unpack (LT.concat l))
         diffArgs :: [GitDiffArgs]
         diffArgs = map parseDiffArgs (map LT.words diffLines)
 
@@ -150,14 +147,14 @@ generateTerms sandbox = do
           -- To properly parse files we need the context that the repository was in
           -- when the commit was made. So we do a checkout. We may also need to
           -- run configure or other commands. We have no support for that yet.
-          run "git" ["checkout", commit]
+          voidSh (run "git" ["checkout", commit])
           -------------------------------
           -- Hacks for configuring/building the linux kernel enough to make it
           -- parsable by ROSE
           -- just take the default config
           -- escaping False (run "yes \"\" | make oldconfig" [])
           -- setup the asm symlink
-          -- run "make" ["include/asm"] 
+          -- run "make" ["include/asm"]
           -- End Hacks for the kernel
           -------------------------------
           -------------------------------
@@ -181,8 +178,7 @@ generateTerms sandbox = do
             -- Only handle C source for now
             when (fileFilter (gdaFilePath gda)) $ do
               liftIO (putStrLn ("running src2term for " ++ (LT.unpack (gdaFilePath gda))))
-              let destDir = commitDir </> (directory (fromText (gdaFilePath gda)))
-                  from    = fromText (gdaFilePath gda)
+              let from    = fromText (gdaFilePath gda)
                   to      = commitDir </> (replaceExtension from "trm")
               catchany_sh
                 (do trm <- src2term from to
@@ -193,12 +189,17 @@ generateTerms sandbox = do
                   liftIO (putStr "Error running src2term: ")
                   liftIO (putStrLn (show e))
                   return ())
-             
+
 
     -- Finally, save off the term files
     saveATerms first  diffArgs
     saveATerms second diffArgs
 
+-- | src2term runs the ROSE program by the same name over the input file,
+-- saves the output to a temp file, reads it back in, deletes the temp file
+-- and returns the string version.
+-- NOTE: We can't just read it from stdout because ROSE dumps warnings there
+-- and later we may not be able to parse it.
 src2term :: FilePath -> FilePath -> Sh (B.ByteString)
 src2term from to = do
   -- TODO: remove this hardcode path
@@ -207,8 +208,7 @@ src2term from to = do
   -- For whatever reason, this gcc command gives us an extra newline that is
   -- troublesome, ergo this hack:
   let destFile = "/tmp" </> filename to
-  [gccInclude] <- LT.lines <$> run "gcc" ["--print-file-name=include"]
-  term <- run "/home/dagit/ftt/rose/compileTree/bin/src2term"
+  voidSh (run "/home/dagit/ftt/rose/compileTree/bin/src2term"
                 [ "--aterm", toTextIgnore from, "-o", toTextIgnore destFile
                 , "-Iinclude"
                 , "-Iinclude/freetype"
@@ -223,53 +223,71 @@ src2term from to = do
                 , "-Isrc/otlayout"
                 , "-Isrc/truetype"
                 , "-Iconfig/unix"
-                ]
+                ])
   -- read the file in so we can add it to the archive
   bs <- liftIO (B.readFile (LT.unpack (toTextIgnore destFile)))
   rm destFile
   return bs
 
+-- | processTerms looks in the version-patterns.zip archive
+-- for version-pairs.hs. When it finds it, then it starts
+-- looking for GitDiffArgs in gdas.hs in each commit directory.
+-- When it reads GitDiffArgs it loads the two term representations
+-- mentioned in the GitDiffArgs and computes the antiunification
+-- of the two and adds that to the zip archive.
 processTerms :: FilePath -> Sh ()
 processTerms dir = do
   let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
-  withFileSh archiveFP ReadWriteMode $ \h -> do
-    archiveBS <- liftIO (B.hGetContents h)
-    let mb_ds   = readFromArchive archive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
-        archive = toArchive (BL.fromChunks [archiveBS])
-    case mb_ds of
-      Just ds -> do
-        liftIO (putStrLn ("length ds = " ++ show (length ds)))
-        forM_ ds $ \(commitBefore,commitAfter) -> do
-          liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
-          let commitDir = fromText commitBefore
-          liftIO (putStrLn ("Looking in " ++ show commitDir))
-          let gdasFilePath = commitDir </> "gdas.hs"
-              mb_gdas      = readFromArchive archive gdasFilePath :: Maybe [GitDiffArgs]
-          case mb_gdas of
-            Just gdas -> do
-              liftIO (putStrLn ("Found gdas.hs"))
-              forM_ gdas $ \gda -> do
-                catchany_sh
-                  (when (fileFilter (gdaFilePath gda)) $ do
-                    liftIO (putStrLn ("Antiunify using " ++ show gda))
-                    let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
-                        antiunifiedFilePath = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
-                        antiTerms           = antiUnifySh archive gda
-                    case antiTerms of
-                      Left e          -> liftIO (putStrLn e)
-                      Right (t,s1,s2) -> do
-                        let entry      = toEntry (LT.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
-                            newArchive = entry `addEntryToArchive` archive
-                        liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
-                        writeFileInChunks archiveFP (fromArchive newArchive)
-                        liftIO (putStrLn "Done writing archive."))
-                  (\e -> do
-                    liftIO (putStr "Error processingTerms: ")
-                    liftIO (putStrLn (show e))
-                    return ())
-            Nothing -> return ()
-      Nothing -> return ()
+  -- Read the archive strictly so that we know the handle is freed as soon as we are done
+  initArchiveBS <- liftIO (B.readFile archiveFP)
 
+  -- find version-pairs.hs in the archive
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+      initArchive = toArchive (BL.fromChunks [initArchiveBS])
+  case mb_ds of
+    Just ds -> do
+      liftIO (putStrLn ("length ds = " ++ show (length ds)))
+      -- process each diff pair
+      forM_ ds $ \(commitBefore,commitAfter) -> do
+        liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
+        let commitDir = fromText commitBefore
+        liftIO (putStrLn ("Looking in " ++ show commitDir))
+        -- Look for the GitDiffArgs stored in the current commit directory of the archive
+        let gdasFilePath = commitDir </> "gdas.hs"
+            mb_gdas      = readFromArchive initArchive gdasFilePath :: Maybe [GitDiffArgs]
+        case mb_gdas of
+          Just gdas -> do
+            liftIO (putStrLn ("Found gdas.hs"))
+            -- For each GitDiffArg we will antiunify them separately
+            forM_ gdas $ \gda -> do
+              catchany_sh
+                -- Make sure we can process this file
+                (when (fileFilter (gdaFilePath gda)) $ do
+                  liftIO (putStrLn ("Antiunify using " ++ show gda))
+                  let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
+                      antiunifiedFilePath = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
+                      antiTerms           = antiUnifySh initArchive gda
+                  case antiTerms of
+                    -- Something went wrong
+                    Left e          -> liftIO (putStrLn e)
+                    Right (t,s1,s2) -> do
+                      -- Reload the archive before we add anything to it
+                      curArchiveBS <- liftIO (B.readFile archiveFP)
+                      let entry      = toEntry (LT.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
+                          curArchive = toArchive (BL.fromChunks [curArchiveBS])
+                          newArchive = entry `addEntryToArchive` curArchive
+                      liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
+                      writeFileInChunks archiveFP (fromArchive newArchive)
+                      liftIO (putStrLn "Done writing archive."))
+                -- Log the error and move on
+                (\e -> do
+                  liftIO (putStr "Error processingTerms: ")
+                  liftIO (putStrLn (show e)))
+          Nothing -> return ()
+    Nothing -> return ()
+
+-- | antiUnifySh Looks at the GitDiffArgs and pulls two terms out of the archive
+-- computes the antiunfication and returns the results
 antiUnifySh :: Archive -> GitDiffArgs -> Either String (Term, Subs, Subs)
 antiUnifySh archive gda = do
   let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
@@ -281,7 +299,7 @@ antiUnifySh archive gda = do
       let termToTree t = atermToTree (getATerm t) t
           termBefore   = termToTree (readATerm (BL.unpack (fromEntry tb)))
           termAfter    = termToTree (readATerm (BL.unpack (fromEntry ta)))
-      in (termBefore `antiunify` termAfter)    
+      in (termBefore `antiunify` termAfter)
     (_, _) -> Left "Failed to load terms"
 -----------------------------------------------------------------------
 
@@ -291,38 +309,9 @@ antiUnifySh archive gda = do
 voidSh :: Sh a -> Sh ()
 voidSh sh = sh >> return ()
 
-readFromFile :: Read a => FilePath -> Sh a
-readFromFile fp = do
-  cs <- liftIO (B.readFile (LT.unpack (toTextIgnore fp)))
-  return $! read (B.unpack cs)
-
 readFromArchive :: Read a => Archive -> FilePath -> Maybe a
 readFromArchive archive fp =
   (read . BL.unpack . fromEntry) <$> findEntryByPath (LT.unpack (toTextIgnore fp)) archive
-
-rmEmptyDir :: FilePath -> Sh ()
-rmEmptyDir fp = do
-  fs <- ls fp
-  when (Prelude.null fs) (liftIO (removeDirectory fp))
-
--- TODO: Refactor this to take the 'sandbox' as a parameter
-pathToFile :: FilePath -> LT.Text -> FilePath -> FilePath
-pathToFile sandbox commit fp = sandbox </> fromText commit </> fp
-
-when_d :: FilePath -> Sh () -> Sh ()
-when_d d m = do
-  b <- test_d d
-  when b m
-
-when_f :: FilePath -> Sh () -> Sh ()
-when_f f m = do
-  b <- test_f f
-  when b m
-
-whenArchive_f :: Monad m => Archive -> FilePath -> m () -> m ()
-whenArchive_f archive f m = do
-  let b = findEntryByPath (LT.unpack (toTextIgnore f)) archive
-  when (isJust b) m
 
 withFileSh :: String -> IOMode -> (Handle -> Sh r) -> Sh r
 withFileSh fp mode f =
