@@ -2,3 +2,4 @@
 .*.swo
 cabal-dev/
 dist/
+.shelly/

@@ -5,27 +5,32 @@ module Main
 )where
 
 -- External dependencies imports
+
 import ATerm.AbstractSyntax
 import ATerm.ReadWrite
 import Codec.Archive.Zip
 import Control.Applicative
 import Control.Exception.Base
 import Control.Monad
+import Control.Monad.State
 import Data.List
 import Data.Maybe
 import Data.String
+import Data.Tree
 import Data.Tree.ATerm
 import Data.Tree.AntiUnification
+import Data.Tree.Types
 import Filesystem hiding (writeFile, readFile, withFile, openFile)
-import Filesystem.Path
+import Filesystem.Path hiding (concat, (<.>))
 import Prelude hiding (FilePath)
-import Shelly hiding (FilePath, (</>))
+import Shelly hiding (FilePath, (</>),get,put)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.IO hiding (FilePath)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Map as M
 import qualified Data.Text.Lazy as LT
 
 -- Recommended by Shelly
@@ -42,6 +47,7 @@ data Options = Options
 data Mode
   = GenerateATerms
   | AntiUnifyATerms
+  | Graphviz
   deriving (Read, Show, Eq, Ord)
 
 defaultOptions :: Options
@@ -68,7 +74,7 @@ options =
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
         return opt { optMode = mode })
       "MODE")
-    "Mode of operation, MODE is either generate-aterms or antiunify-aterms"
+    "Mode of operation, MODE is either generate-aterms, antiunify-aterms, or graphviz"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -81,6 +87,7 @@ options =
 parseMode :: String -> Maybe Mode
 parseMode "generate-aterms"  = Just GenerateATerms
 parseMode "antiunify-aterms" = Just AntiUnifyATerms
+parseMode "graphviz"         = Just Graphviz
 parseMode _                  = Nothing
 -----------------------------------------------------------------------
 
@@ -109,6 +116,7 @@ main = do
     case optMode opts of
       GenerateATerms  -> generateTerms (optSandbox opts)
       AntiUnifyATerms -> processTerms  (optSandbox opts)
+      Graphviz        -> generateGraphs (optSandbox opts)
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
@@ -143,8 +151,8 @@ generateTerms sandbox = do
         parseDiffArgs [fp,_,_,_,_,_,_] = GitDiffArgs { gdaFilePath     = fp
                                                      , gdaBeforeCommit = first
                                                      , gdaAfterCommit  = second }
-
         parseDiffArgs l | otherwise    = error ("unexpected output from git diff: " ++ LT.unpack (LT.concat l))
+
         diffArgs :: [GitDiffArgs]
         diffArgs = map parseDiffArgs (map LT.words diffLines)
 
@@ -306,8 +314,133 @@ antiUnifySh archive gda = do
           termAfter    = termToTree (readATerm (BL.unpack (fromEntry ta)))
       in (termBefore `antiunify` termAfter)
     (_, _) -> Left "Failed to load terms"
+
+generateGraphs :: FilePath -> Sh ()
+generateGraphs dir = do
+  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  -- Read the archive strictly so that we know the handle is freed as soon as we are done
+  initArchiveBS <- liftIO (B.readFile archiveFP)
+
+  -- find version-pairs.hs in the archive
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+      initArchive = toArchive (BL.fromChunks [initArchiveBS])
+      index       = filesInArchive initArchive
+  case mb_ds of
+    Nothing -> return ()
+    Just ds -> do
+      liftIO (putStrLn "just ds")
+      forM_ ds $ \(commitBefore,commitAfter) -> do
+        let diffDir = LT.unpack (commitBefore `LT.append` ".." `LT.append` commitAfter `LT.append` "/")
+            inDir   = filter (diffDir `isPrefixOf`) index
+            hs      = filter (".hs" `isSuffixOf`) inDir
+        forM_ hs $ \h -> do
+          liftIO (putStrLn h)
+          let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
+          case term of
+            Nothing        -> return ()
+            Just (t,s1,s2) -> do
+              let destPath = "/tmp/dagit" </> directory (fromString h)
+              mkdir_p destPath
+              makeGraphFromSubs (destPath </> filename (fromString h) <.> "s1") s1
+              makeGraphFromSubs (destPath </> filename (fromString h) <.> "s2") s2
+
+makeGraphFromSubs :: FilePath -> Subs -> Sh ()
+makeGraphFromSubs fp subs = do
+  let ps  = M.assocs (extractMap subs)
+      gs  = map (\(k,v) -> (extractName k, treeToGraphviz v)) ps
+      cs  = map (\(k,v) -> (k,unlines v)) gs
+      o k = (LT.unpack (toTextIgnore fp)) ++ "-" ++ k ++ ".gv"
+  forM_ cs (\(k,v) -> liftIO (writeFile (o k) (concat ["digraph {\n",v,"}"])))
+  where extractName (Node (LBLString n) _) = n
+        extractMap (Subs t) = t
 -----------------------------------------------------------------------
 
+
+-----------------------------------------------------------------------
+-- * Visualize Differences
+
+-- | This code is taken from the compose-hpc rulegen:
+{-|
+  Take a LabeledTree and return a list of lines for the
+  corresponding graphviz DOT file.
+-}
+treeToGraphviz :: LabeledTree -- ^ Tree to print
+               -> [String]    -- ^ DOT-file lines
+treeToGraphviz t = snd $ evalIDGen t tToGV
+--
+-- node attributes for different node types
+--
+tToGV :: LabeledTree -> IDGen (Int, [String])
+tToGV (Node label kids) = do
+  myID <- genID
+  let self = makeNode myID [cRed] (gvShowLabel label)
+  processedKids <- mapM tToGV kids
+  let (kidIDs, kidStrings) = unzip processedKids
+      kidEdges = map (makeEdge myID) kidIDs
+  return (myID, self:(kidEdges++(concat kidStrings)))
+
+gvShowLabel :: Label -> String
+gvShowLabel (LBLString s) = s
+gvShowLabel (LBLList)     = "LIST"
+gvShowLabel (LBLInt i)    = show i
+
+-- use state monad for generating unique identifiers
+type IDGen = State Int
+
+-- generate sequence of unique ID numbers
+genID :: IDGen Int
+genID = do
+  i <- get
+  put (i+1)
+  return i
+
+-- generate variables with a fixed prefix and a unique suffix.  For
+-- example, with prefix "x", a sequence of invocations of this
+-- function will yield the names "x0", "x1", "x2", and so on.
+genName :: String -> IDGen String
+genName n = do
+  i <- genID
+  return $ n ++ (show i)
+
+evalIDGen :: a -> (a -> IDGen b) -> b
+evalIDGen x f = evalState (f x) 0
+
+-- helper for common case with no attribute : avoid having to write Nothing
+-- all over the place
+makeEdge :: Int -> Int -> String
+makeEdge i j = makeAttrEdge i j Nothing
+
+-- node maker
+makeNode :: Int -> [String] -> String -> String
+makeNode i attrs lbl =
+  "NODE"++(show i)++" ["++a++"];"
+  where a = intercalate "," (("label=\""++(cleanlabel lbl)++"\""):attrs)
+
+cGreen :: String
+cGreen = "color=green"
+
+cRed :: String
+cRed   = "color=red"
+
+cBlue :: String
+cBlue  = "color=blue"
+
+cBlack :: String
+cBlack = "color=black"
+
+aBold :: String
+aBold  = "style=bold"
+--
+-- edge makers
+--
+makeAttrEdge :: Int -> Int -> Maybe [String] -> String
+makeAttrEdge i j Nothing = "NODE"++(show i)++" -> NODE"++(show j)++";"
+makeAttrEdge i j (Just as) = "NODE"++(show i)++" -> NODE"++(show j)++" ["++a++"];"
+  where a = intercalate "," as
+
+cleanlabel :: String -> String
+cleanlabel lbl = filter (\c -> c /= '\\' && c /= '\'' && c /= '\"') lbl
+-----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
 -- * Utility Functions
