@@ -177,32 +177,30 @@ generateTerms sandbox = do
           void (run "./configure" []) `catchany_sh` (const (return ()))
           -- End Hacks for the kernel
           -------------------------------
-          forM_ gdas $ \gda -> do
-            -- We make a point to read/write the achrive each iteration to avoid
-            -- losing data from having the run terminate in the middle
-            archiveBS <- liftIO (B.readFile archiveFP)
+          flipFoldM_ gdas initArchive $ \archive gda -> do
             let commitDir   = fromText commit
-                archive     = toArchive archiveBL
                 gdasFP      = LT.unpack (toTextIgnore (commitDir </> "gdas.hs"))
                 gdasEntry   = toEntry gdasFP 0 (BL.pack (show gdas))
                 gdasArchive = gdasEntry `addEntryToArchive` archive
-                archiveBL   = BL.fromChunks [archiveBS]
             -- parse (gdaFilePath gda) using src2trm and save the result in destDir
             -- Only handle C source for now
-            when (fileFilter (gdaFilePath gda)) $ do
-              liftIO (putStrLn ("running src2term for " ++ (LT.unpack (gdaFilePath gda))))
-              let from    = fromText (gdaFilePath gda)
-                  to      = commitDir </> (replaceExtension from "trm")
-              catchany_sh
-                (do trm <- src2term from to
-                    let trmArchive = toEntry (LT.unpack (toTextIgnore to)) 0 (BL.fromChunks [trm]) `addEntryToArchive` gdasArchive
-                    writeFileInChunks archiveFP (fromArchive trmArchive)
-                    liftIO (putStrLn ("Wrote: " ++ LT.unpack (toTextIgnore to) ++ " in archive.")))
-                (\e -> do
-                  liftIO (putStr "Error running src2term: ")
-                  liftIO (putStrLn (show e))
-                  return ())
-
+            if fileFilter (gdaFilePath gda)
+              then do
+                liftIO (putStrLn ("running src2term for " ++ (LT.unpack (gdaFilePath gda))))
+                let from    = fromText (gdaFilePath gda)
+                    to      = commitDir </> (replaceExtension from "trm")
+                catchany_sh
+                  (do trm <- src2term from to
+                      let trmArchive = toEntry (LT.unpack (toTextIgnore to)) 0 (BL.fromChunks [trm]) `addEntryToArchive` gdasArchive
+                      writeFileInChunks archiveFP (fromArchive trmArchive)
+                      liftIO (putStrLn ("Wrote: " ++ LT.unpack (toTextIgnore to) ++ " in archive."))
+                      return trmArchive)
+                  (\e -> do
+                    liftIO (putStr "Error running src2term: ")
+                    liftIO (putStrLn (show e))
+                    return gdasArchive)
+              else
+                return gdasArchive
 
     -- Finally, save off the term files
     saveATerms first  diffArgs
@@ -251,12 +249,11 @@ src2term from to = do
 processTerms :: FilePath -> Sh ()
 processTerms dir = do
   let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
-  -- Read the archive strictly so that we know the handle is freed as soon as we are done
-  initArchiveBS <- liftIO (B.readFile archiveFP)
+  initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
   let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
-      initArchive = toArchive (BL.fromChunks [initArchiveBS])
+      initArchive = toArchive initArchiveBS
   case mb_ds of
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
@@ -272,30 +269,31 @@ processTerms dir = do
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will antiunify them separately
-            forM_ gdas $ \gda -> do
+            flipFoldM_ gdas initArchive $ \archive gda -> do
               catchany_sh
                 -- Make sure we can process this file
-                (when (fileFilter (gdaFilePath gda)) $ do
-                  liftIO (putStrLn ("Antiunify using " ++ show gda))
-                  let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
-                      antiunifiedFilePath = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
-                      antiTerms           = antiUnifySh initArchive gda
-                  case antiTerms of
-                    -- Something went wrong
-                    Left e          -> liftIO (putStrLn e)
-                    Right (t,s1,s2) -> do
-                      -- Reload the archive before we add anything to it
-                      curArchiveBS <- liftIO (B.readFile archiveFP)
-                      let entry      = toEntry (LT.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
-                          curArchive = toArchive (BL.fromChunks [curArchiveBS])
-                          newArchive = entry `addEntryToArchive` curArchive
-                      liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
-                      writeFileInChunks archiveFP (fromArchive newArchive)
-                      liftIO (putStrLn "Done writing archive."))
+                (if fileFilter (gdaFilePath gda)
+                  then do
+                    liftIO (putStrLn ("Antiunify using " ++ show gda))
+                    let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
+                        antiunifiedFilePath = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
+                        antiTerms           = antiUnifySh archive gda
+                    case antiTerms of
+                      -- Something went wrong
+                      Left e          -> liftIO (putStrLn e) >> return archive
+                      Right (t,s1,s2) -> do
+                        let entry      = toEntry (LT.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
+                            newArchive = entry `addEntryToArchive` archive
+                        liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
+                        writeFileInChunks archiveFP (fromArchive newArchive)
+                        liftIO (putStrLn "Done writing archive.")
+                        return newArchive
+                  else return archive)
                 -- Log the error and move on
                 (\e -> do
                   liftIO (putStr "Error processingTerms: ")
-                  liftIO (putStrLn (show e)))
+                  liftIO (putStrLn (show e))
+                  return archive)
           Nothing -> return ()
     Nothing -> return ()
 
@@ -318,12 +316,11 @@ antiUnifySh archive gda = do
 generateGraphs :: FilePath -> Sh ()
 generateGraphs dir = do
   let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
-  -- Read the archive strictly so that we know the handle is freed as soon as we are done
-  initArchiveBS <- liftIO (B.readFile archiveFP)
+  initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
   let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
-      initArchive = toArchive (BL.fromChunks [initArchiveBS])
+      initArchive = toArchive initArchiveBS
       index       = filesInArchive initArchive
   case mb_ds of
     Nothing -> return ()
@@ -473,4 +470,8 @@ writeFileInChunks fp bl = do
 fileFilter :: LT.Text -> Bool
 fileFilter fp = (".c" `LT.isSuffixOf` fp)
               ||(".h" `LT.isSuffixOf` fp)
+
+flipFoldM_ :: Monad m => [b] -> a -> (a -> b -> m a) -> m ()
+flipFoldM_ xs a f = foldM_ f a xs
+
 -----------------------------------------------------------------------
