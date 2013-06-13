@@ -142,7 +142,7 @@ generateTerms sandbox = do
       archiveFP      = LT.unpack (toTextIgnore (sandbox </> "version-patterns.zip"))
   writeFileInChunks archiveFP (fromArchive initArchive)
 
-  forM_ pairs $ \(first,second) -> do
+  flipFoldM_ pairs initArchive $ \archive' (first,second) -> do
     setenv "GIT_EXTERNAL_DIFF" "echo"
     diffLines <- LT.lines <$> run "git" ["diff", first, second]
     -- Git should always return the same information, eg., if this fails something has gone wrong
@@ -156,8 +156,8 @@ generateTerms sandbox = do
         diffArgs :: [GitDiffArgs]
         diffArgs = map parseDiffArgs (map LT.words diffLines)
 
-        saveATerms :: LT.Text -> [GitDiffArgs] -> Sh ()
-        saveATerms commit gdas = do
+        saveATerms :: Archive -> LT.Text -> [GitDiffArgs] -> Sh Archive
+        saveATerms initArchive commit gdas = do
           -- To properly parse files we need the context that the repository was in
           -- when the commit was made. So we do a checkout. We may also need to
           -- run configure or other commands. We have no support for that yet.
@@ -177,7 +177,7 @@ generateTerms sandbox = do
           void (run "./configure" []) `catchany_sh` (const (return ()))
           -- End Hacks for the kernel
           -------------------------------
-          flipFoldM_ gdas initArchive $ \archive gda -> do
+          flipFoldM gdas initArchive $ \archive gda -> do
             let commitDir   = fromText commit
                 gdasFP      = LT.unpack (toTextIgnore (commitDir </> "gdas.hs"))
                 gdasEntry   = toEntry gdasFP 0 (BL.pack (show gdas))
@@ -203,8 +203,8 @@ generateTerms sandbox = do
                 return gdasArchive
 
     -- Finally, save off the term files
-    saveATerms first  diffArgs
-    saveATerms second diffArgs
+    archive'' <- saveATerms archive' first  diffArgs
+    saveATerms archive'' second diffArgs
 
 -- | src2term runs the ROSE program by the same name over the input file,
 -- saves the output to a temp file, reads it back in, deletes the temp file
@@ -258,18 +258,18 @@ processTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      forM_ ds $ \(commitBefore,commitAfter) -> do
+      flipFoldM_ ds initArchive $ \archive' (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
         -- Look for the GitDiffArgs stored in the current commit directory of the archive
         let gdasFilePath = commitDir </> "gdas.hs"
-            mb_gdas      = readFromArchive initArchive gdasFilePath :: Maybe [GitDiffArgs]
+            mb_gdas      = readFromArchive archive' gdasFilePath :: Maybe [GitDiffArgs]
         case mb_gdas of
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will antiunify them separately
-            flipFoldM_ gdas initArchive $ \archive gda -> do
+            flipFoldM gdas archive' $ \archive gda -> do
               catchany_sh
                 -- Make sure we can process this file
                 (if fileFilter (gdaFilePath gda)
@@ -294,7 +294,7 @@ processTerms dir = do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
                   return archive)
-          Nothing -> return ()
+          Nothing -> return archive'
     Nothing -> return ()
 
 -- | antiUnifySh Looks at the GitDiffArgs and pulls two terms out of the archive
@@ -306,12 +306,14 @@ antiUnifySh archive gda = do
       mb_tb              = findEntryByPath (LT.unpack (toTextIgnore termBeforeFilePath)) archive
       mb_ta              = findEntryByPath (LT.unpack (toTextIgnore termAfterFilePath))  archive
   case (mb_tb, mb_ta) of
-    (Just tb, Just ta) -> Right $
+    (Just tb, Just ta) ->
       let termToTree t = atermToTree (getATerm t) t
-          termBefore   = termToTree (readATerm (BL.unpack (fromEntry tb)))
-          termAfter    = termToTree (readATerm (BL.unpack (fromEntry ta)))
-      in (termBefore `antiunify` termAfter)
-    (_, _) -> Left "Failed to load terms"
+          termBefore   = filterFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
+          termAfter    = filterFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
+      in case (termBefore,termAfter) of
+         (Just term1,Just term2) -> Right (term1 `antiunify` term2)
+         _                       -> Left "Filter return Nothing"
+    _ -> Left "Failed to load terms"
 
 generateGraphs :: FilePath -> Sh ()
 generateGraphs dir = do
@@ -473,5 +475,12 @@ fileFilter fp = (".c" `LT.isSuffixOf` fp)
 
 flipFoldM_ :: Monad m => [b] -> a -> (a -> b -> m a) -> m ()
 flipFoldM_ xs a f = foldM_ f a xs
+
+flipFoldM :: Monad m => [b] -> a -> (a -> b -> m a) -> m a
+flipFoldM xs a f = foldM f a xs
+
+-- | Remove file_infos from the tree
+filterFileInfos :: LabeledTree -> Maybe LabeledTree
+filterFileInfos tree = removeSubtrees (LBLString "file_info") tree
 
 -----------------------------------------------------------------------
