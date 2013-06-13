@@ -157,7 +157,7 @@ generateTerms sandbox = do
         diffArgs = map parseDiffArgs (map LT.words diffLines)
 
         saveATerms :: Archive -> LT.Text -> [GitDiffArgs] -> Sh Archive
-        saveATerms initArchive commit gdas = do
+        saveATerms a commit gdas = do
           -- To properly parse files we need the context that the repository was in
           -- when the commit was made. So we do a checkout. We may also need to
           -- run configure or other commands. We have no support for that yet.
@@ -177,7 +177,7 @@ generateTerms sandbox = do
           void (run "./configure" []) `catchany_sh` (const (return ()))
           -- End Hacks for the kernel
           -------------------------------
-          flipFoldM gdas initArchive $ \archive gda -> do
+          flipFoldM gdas a $ \archive gda -> do
             let commitDir   = fromText commit
                 gdasFP      = LT.unpack (toTextIgnore (commitDir </> "gdas.hs"))
                 gdasEntry   = toEntry gdasFP 0 (BL.pack (show gdas))
