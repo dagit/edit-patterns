@@ -22,6 +22,8 @@ import Data.Tree
 import Data.Tree.ATerm
 import Data.Tree.AntiUnification
 import Data.Tree.Types
+import Data.Tree.Weaver
+import Data.Tree.Yang
 import Filesystem hiding (writeFile, readFile, withFile, openFile)
 import Filesystem.Path hiding (concat, (<.>))
 import JavaATerms
@@ -56,6 +58,7 @@ data Mode
   | AntiUnifyATerms
   | Graphviz
   | Unparse
+  | Weave
   deriving (Read, Show, Eq, Ord)
 
 defaultOptions :: Options
@@ -82,7 +85,7 @@ options =
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
         return opt { optMode = mode })
       "MODE")
-    "Mode of operation, MODE is either generate-aterms, antiunify-aterms, graphviz, or unparse"
+    "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, graphviz, unparse, weave"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -97,6 +100,7 @@ parseMode "generate-aterms"  = Just GenerateATerms
 parseMode "antiunify-aterms" = Just AntiUnifyATerms
 parseMode "graphviz"         = Just Graphviz
 parseMode "unparse"          = Just Unparse
+parseMode "weave"            = Just Weave
 parseMode _                  = Nothing
 -----------------------------------------------------------------------
 
@@ -127,6 +131,7 @@ main = do
       AntiUnifyATerms -> processTerms  (optSandbox opts)
       Graphviz        -> generateGraphs (optSandbox opts)
       Unparse         -> unparseTerms (optSandbox opts)
+      Weave           -> weaveTerms (optSandbox opts)
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
@@ -407,6 +412,76 @@ term2src fp subs = do
   return (show cs)
   where extractName (Node (LBLString n) _) = n
         extractMap (Subs t) = t
+
+weaveTerms :: FilePath -> Sh ()
+weaveTerms dir = do
+  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  initArchiveBS <- liftIO (BL.readFile archiveFP)
+
+  -- find version-pairs.hs in the archive
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+      initArchive = toArchive initArchiveBS
+  case mb_ds of
+    Just ds -> do
+      liftIO (putStrLn ("length ds = " ++ show (length ds)))
+      -- process each diff pair
+      flipFoldM_ ds initArchive $ \archive' (commitBefore,commitAfter) -> do
+        liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
+        let commitDir = fromText commitBefore
+        liftIO (putStrLn ("Looking in " ++ show commitDir))
+        -- Look for the GitDiffArgs stored in the current commit directory of the archive
+        let gdasFilePath = commitDir </> "gdas.hs"
+            mb_gdas      = readFromArchive archive' gdasFilePath :: Maybe [GitDiffArgs]
+        case mb_gdas of
+          Just gdas -> do
+            liftIO (putStrLn ("Found gdas.hs"))
+            -- For each GitDiffArg we will weave them separately
+            flipFoldM gdas archive' $ \archive gda -> do
+              catchany_sh
+                -- Make sure we can process this file
+                (if fileFilter (gdaFilePath gda)
+                  then do
+                    liftIO (putStrLn ("weave using " ++ show gda))
+                    let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
+                        weaveFilePath       = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
+                        weave               = weaveSh archive gda
+                    case weave of
+                      -- Something went wrong
+                      Left e  -> liftIO (putStrLn e) >> return archive
+                      Right w -> do
+                         let entry      = toEntry (LT.unpack (toTextIgnore weaveFilePath)) 0 (BL.pack (show w))
+                             newArchive = entry `addEntryToArchive` archive
+                         liftIO (putStrLn ("Wrote weave to: " ++ (LT.unpack (toTextIgnore weaveFilePath))))
+                         writeFileInChunks archiveFP (fromArchive newArchive)
+                         liftIO (putStrLn "Done writing archive.")
+                         liftIO (toArchive <$> (BL.readFile archiveFP))
+                  else return archive)
+                -- Log the error and move on
+                (\e -> do
+                  liftIO (putStr "Error processingTerms: ")
+                  liftIO (putStrLn (show e))
+                  return archive)
+          Nothing -> return archive'
+    Nothing -> return ()
+
+-- weaveSh :: Archive -> GitDiffArgs -> Either String (Term, Subs, Subs)
+weaveSh archive gda = do
+  let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
+      termAfterFilePath  = fromText (gdaAfterCommit gda)  </> replaceExtension (fromText (gdaFilePath gda)) "trm"
+      mb_tb              = findEntryByPath (LT.unpack (toTextIgnore termBeforeFilePath)) archive
+      mb_ta              = findEntryByPath (LT.unpack (toTextIgnore termAfterFilePath))  archive
+  case (mb_tb, mb_ta) of
+    (Just tb, Just ta) ->
+      let termToTree t = atermToTree (getATerm t) t
+          termBefore   = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
+          termAfter    = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
+      in case (termBefore,termAfter) of
+         (term1,term2) -> let (y1,y2) = treediff termBefore termAfter (==)
+                              w       = weave y1 y2 False
+                          in Right w
+         _             -> Left "Filter return Nothing"
+    _ -> Left "Failed to load terms"
+
 -----------------------------------------------------------------------
 
 
