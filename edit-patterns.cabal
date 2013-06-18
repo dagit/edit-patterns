@@ -13,18 +13,22 @@ cabal-version:       >=1.8
 
 executable edit-patterns
   main-is:             Main.hs
+  other-modules:       JavaATerms
   build-depends:       base >= 3 && < 5
                      , containers
                      , mtl
+                     , transformers
                      , shelly
                      , text
                      , system-filepath
                      , system-fileio
                      , aterm
+                     , aterm-utils >= 0.2.0.0
                      , tree-utils
                      , zip-archive
                      , bytestring
-
+                     , language-java
+                     , ghc-prim
   hs-source-dirs:      .
                      , src
 

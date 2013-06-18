@@ -7,7 +7,9 @@ module Main
 -- External dependencies imports
 
 import ATerm.AbstractSyntax
+import ATerm.Generics as G
 import ATerm.ReadWrite
+import ATerm.Unshared
 import Codec.Archive.Zip
 import Control.Applicative
 import Control.Exception.Base
@@ -22,6 +24,10 @@ import Data.Tree.AntiUnification
 import Data.Tree.Types
 import Filesystem hiding (writeFile, readFile, withFile, openFile)
 import Filesystem.Path hiding (concat, (<.>))
+import JavaATerms
+import Language.Java.Parser
+import Language.Java.Pretty
+import Language.Java.Syntax
 import Prelude hiding (FilePath)
 import Shelly hiding (FilePath, (</>),get,put)
 import System.Console.GetOpt
@@ -32,6 +38,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as LT
+import qualified Filesystem as FS
 
 -- Recommended by Shelly
 default (LT.Text)
@@ -48,6 +55,7 @@ data Mode
   = GenerateATerms
   | AntiUnifyATerms
   | Graphviz
+  | Unparse
   deriving (Read, Show, Eq, Ord)
 
 defaultOptions :: Options
@@ -74,7 +82,7 @@ options =
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
         return opt { optMode = mode })
       "MODE")
-    "Mode of operation, MODE is either generate-aterms, antiunify-aterms, or graphviz"
+    "Mode of operation, MODE is either generate-aterms, antiunify-aterms, graphviz, or unparse"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -88,6 +96,7 @@ parseMode :: String -> Maybe Mode
 parseMode "generate-aterms"  = Just GenerateATerms
 parseMode "antiunify-aterms" = Just AntiUnifyATerms
 parseMode "graphviz"         = Just Graphviz
+parseMode "unparse"          = Just Unparse
 parseMode _                  = Nothing
 -----------------------------------------------------------------------
 
@@ -117,6 +126,7 @@ main = do
       GenerateATerms  -> generateTerms (optSandbox opts)
       AntiUnifyATerms -> processTerms  (optSandbox opts)
       Graphviz        -> generateGraphs (optSandbox opts)
+      Unparse         -> unparseTerms (optSandbox opts)
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
@@ -174,7 +184,7 @@ generateTerms sandbox = do
           -------------------------------
           -- Hacks for configuring/building freetype2 enough to make it
           -- parsable by ROSE
-          void (run "./configure" []) `catchany_sh` (const (return ()))
+          -- void (run "./configure" []) `catchany_sh` (const (return ()))
           -- End Hacks for the kernel
           -------------------------------
           flipFoldM gdas a $ \archive gda -> do
@@ -190,11 +200,11 @@ generateTerms sandbox = do
                 let from    = fromText (gdaFilePath gda)
                     to      = commitDir </> (replaceExtension from "trm")
                 catchany_sh
-                  (do trm <- src2term from to
+                  (do trm <- B.pack <$> writeSharedATerm <$> src2term from
                       let trmArchive = toEntry (LT.unpack (toTextIgnore to)) 0 (BL.fromChunks [trm]) `addEntryToArchive` gdasArchive
                       writeFileInChunks archiveFP (fromArchive trmArchive)
                       liftIO (putStrLn ("Wrote: " ++ LT.unpack (toTextIgnore to) ++ " in archive."))
-                      return trmArchive)
+                      liftIO (toArchive <$> (BL.readFile archiveFP)))
                   (\e -> do
                     liftIO (putStr "Error running src2term: ")
                     liftIO (putStrLn (show e))
@@ -211,6 +221,7 @@ generateTerms sandbox = do
 -- and returns the string version.
 -- NOTE: We can't just read it from stdout because ROSE dumps warnings there
 -- and later we may not be able to parse it.
+{-
 src2term :: FilePath -> FilePath -> Sh (B.ByteString)
 src2term from to = do
   -- TODO: remove this hardcode path
@@ -239,6 +250,13 @@ src2term from to = do
   bs <- liftIO (B.readFile (LT.unpack (toTextIgnore destFile)))
   rm destFile
   return bs
+-}
+src2term :: FilePath -> Sh ATermTable
+src2term from = do
+  cs <- liftIO (readFile (LT.unpack (toTextIgnore from)))
+  case parser compilationUnit cs of
+    Right prog -> return (toATermTable (toATerm prog))
+    Left  e    -> fail (show e)
 
 -- | processTerms looks in the version-patterns.zip archive
 -- for version-pairs.hs. When it finds it, then it starts
@@ -287,7 +305,7 @@ processTerms dir = do
                         liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
                         writeFileInChunks archiveFP (fromArchive newArchive)
                         liftIO (putStrLn "Done writing archive.")
-                        return newArchive
+                        liftIO (toArchive <$> (BL.readFile archiveFP))
                   else return archive)
                 -- Log the error and move on
                 (\e -> do
@@ -308,11 +326,11 @@ antiUnifySh archive gda = do
   case (mb_tb, mb_ta) of
     (Just tb, Just ta) ->
       let termToTree t = atermToTree (getATerm t) t
-          termBefore   = filterFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
-          termAfter    = filterFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
+          termBefore   = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
+          termAfter    = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
       in case (termBefore,termAfter) of
-         (Just term1,Just term2) -> Right (term1 `antiunify` term2)
-         _                       -> Left "Filter return Nothing"
+         (term1,term2) -> Right (term1 `antiunify` term2)
+         _             -> Left "Filter return Nothing"
     _ -> Left "Failed to load terms"
 
 generateGraphs :: FilePath -> Sh ()
@@ -350,6 +368,43 @@ makeGraphFromSubs fp subs = do
       cs  = map (\(k,v) -> (k,unlines v)) gs
       o k = (LT.unpack (toTextIgnore fp)) ++ "-" ++ k ++ ".gv"
   forM_ cs (\(k,v) -> liftIO (writeFile (o k) (concat ["digraph {\n",v,"}"])))
+  where extractName (Node (LBLString n) _) = n
+        extractMap (Subs t) = t
+
+unparseTerms :: FilePath -> Sh ()
+unparseTerms dir = do
+  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  initArchiveBS <- liftIO (BL.readFile archiveFP)
+
+  -- find version-pairs.hs in the archive
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+      initArchive = toArchive initArchiveBS
+      index       = filesInArchive initArchive
+  case mb_ds of
+    Nothing -> return ()
+    Just ds -> do
+      liftIO (putStrLn "just ds")
+      forM_ ds $ \(commitBefore,commitAfter) -> do
+        let diffDir = LT.unpack (commitBefore `LT.append` ".." `LT.append` commitAfter `LT.append` "/")
+            inDir   = filter (diffDir `isPrefixOf`) index
+            hs      = filter (".hs" `isSuffixOf`) inDir
+        forM_ hs $ \h -> do
+          liftIO (putStrLn h)
+          let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
+          case term of
+            Nothing        -> return ()
+            Just (t,s1,s2) -> do
+              let destPath = "/tmp/dagit" </> directory (fromString h)
+              mkdir_p destPath
+              term2src (destPath </> filename (fromString h) <.> "s1") s1 >>= liftIO . putStrLn 
+              term2src (destPath </> filename (fromString h) <.> "s2") s2 >>= liftIO . putStrLn 
+
+term2src :: FilePath -> Subs -> Sh String
+term2src fp subs = do
+  let ps = M.assocs (extractMap subs)
+      gs = map (\(k,v) -> (extractName k, treeToATerm v)) ps
+      cs = map (\(k,v) -> (k, getATermFull v)) gs
+  return (show cs)
   where extractName (Node (LBLString n) _) = n
         extractMap (Subs t) = t
 -----------------------------------------------------------------------
@@ -470,8 +525,7 @@ writeFileInChunks fp bl = do
 -- | We're mostly interested in C at the moment, so that means
 -- .c and .h files.
 fileFilter :: LT.Text -> Bool
-fileFilter fp = (".c" `LT.isSuffixOf` fp)
-              ||(".h" `LT.isSuffixOf` fp)
+fileFilter fp = (".java" `LT.isSuffixOf` fp)
 
 flipFoldM_ :: Monad m => [b] -> a -> (a -> b -> m a) -> m ()
 flipFoldM_ xs a f = foldM_ f a xs
@@ -483,4 +537,12 @@ flipFoldM xs a f = foldM f a xs
 filterFileInfos :: LabeledTree -> Maybe LabeledTree
 filterFileInfos tree = removeSubtrees (LBLString "file_info") tree
 
+-- | Homogenize the file_infos in the tree
+replaceFileInfos :: LabeledTree -> LabeledTree
+replaceFileInfos t = replaceSubtrees (LBLString "file_info")
+                                     (Node (LBLString "file_info")
+                                           [Node (LBLString "\"compilerGenerated\"") []
+                                           ,Node (LBLInt    0)                       []
+                                           ,Node (LBLInt    0)                       []])
+                                     t
 -----------------------------------------------------------------------
