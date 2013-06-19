@@ -14,6 +14,7 @@ cabal-version:       >=1.8
 executable edit-patterns
   main-is:             Main.hs
   other-modules:       JavaATerms
+                     , CATerms
   build-depends:       base >= 3 && < 5
                      , containers
                      , mtl
@@ -28,6 +29,7 @@ executable edit-patterns
                      , zip-archive
                      , bytestring
                      , language-java
+                     , language-c
                      , ghc-prim
   hs-source-dirs:      .
                      , src

@@ -10,6 +10,7 @@ import ATerm.AbstractSyntax
 import ATerm.Generics as G
 import ATerm.ReadWrite
 import ATerm.Unshared
+import CATerms
 import Codec.Archive.Zip
 import Control.Applicative
 import Control.Exception.Base
@@ -419,24 +420,24 @@ weaveTerms dir = do
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
-  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
-      initArchive = toArchive initArchiveBS
+  let mb_ds   = readFromArchive archive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+      archive = toArchive initArchiveBS
   case mb_ds of
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      flipFoldM_ ds initArchive $ \archive' (commitBefore,commitAfter) -> do
+      forM_ ds $ \(commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
         -- Look for the GitDiffArgs stored in the current commit directory of the archive
         let gdasFilePath = commitDir </> "gdas.hs"
-            mb_gdas      = readFromArchive archive' gdasFilePath :: Maybe [GitDiffArgs]
+            mb_gdas      = readFromArchive archive gdasFilePath :: Maybe [GitDiffArgs]
         case mb_gdas of
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will weave them separately
-            flipFoldM gdas archive' $ \archive gda -> do
+            forM_ gdas $ \gda -> do
               catchany_sh
                 -- Make sure we can process this file
                 (if fileFilter (gdaFilePath gda)
@@ -447,21 +448,24 @@ weaveTerms dir = do
                         weave               = weaveSh archive gda
                     case weave of
                       -- Something went wrong
-                      Left e  -> liftIO (putStrLn e) >> return archive
+                      Left e  -> liftIO (putStrLn e)
                       Right w -> do
                          let entry      = toEntry (LT.unpack (toTextIgnore weaveFilePath)) 0 (BL.pack (show w))
+                             destPath   = "/tmp/dagit" </> directory weaveFilePath
+                             outfp      = LT.unpack (toTextIgnore (destPath </> (filename (replaceExtension weaveFilePath "gv"))))
+                             gv         = concat ["digraph {\n",unlines (wtreeToGraphviz w),"}"]
                              newArchive = entry `addEntryToArchive` archive
-                         liftIO (putStrLn ("Wrote weave to: " ++ (LT.unpack (toTextIgnore weaveFilePath))))
-                         writeFileInChunks archiveFP (fromArchive newArchive)
-                         liftIO (putStrLn "Done writing archive.")
-                         liftIO (toArchive <$> (BL.readFile archiveFP))
-                  else return archive)
+                         mkdir_p destPath
+                         liftIO (putStrLn ("Writing: " ++ outfp))
+                         liftIO (writeFile outfp gv)
+                         liftIO (putStrLn ("Wrote weave to: " ++ outfp))
+                  else return ())
                 -- Log the error and move on
                 (\e -> do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
-                  return archive)
-          Nothing -> return archive'
+                  return ())
+          Nothing -> return ()
     Nothing -> return ()
 
 -- weaveSh :: Archive -> GitDiffArgs -> Either String (Term, Subs, Subs)
@@ -487,6 +491,51 @@ weaveSh archive gda = do
 
 -----------------------------------------------------------------------
 -- * Visualize Differences
+
+wtreeToGraphviz :: WeaveTree a -- ^ Tree to print
+                -> [String]    -- ^ DOT-file lines
+wtreeToGraphviz t = snd $ evalIDGen t wToGV
+
+wpLabel :: WeavePoint a -> String
+wpLabel (Match _)      = "MATCH"
+wpLabel (Mismatch _ _) = "MISMATCH"
+wpLabel (RightHole _)  = "RHOLE"
+wpLabel (LeftHole _)   = "LHOLE"
+
+wpToGV :: WeavePoint a -> IDGen (Int, [String])
+wpToGV wp = do
+  myID <- genID
+  let self = makeNode myID [cGreen] (wpLabel wp)
+  case wp of
+    Match t -> do (kidID, kidStrings) <- wToGV t
+                  let kEdge = makeEdge myID kidID
+                  return (myID, self:kEdge:kidStrings)
+    Mismatch a b ->  do (kidID1, kidStrings1) <- wToGV a
+                        (kidID2, kidStrings2) <- wToGV b
+                        let kEdge1 = makeEdge myID kidID1
+                            kEdge2 = makeEdge myID kidID2
+                        return (myID, self:kEdge1:kEdge2:(kidStrings1++kidStrings2))
+    LeftHole t -> do (kidID, kidStrings) <- wToGV t
+                     let kEdge = makeEdge myID kidID
+                     return (myID, self:kEdge:kidStrings)
+    RightHole t -> do (kidID, kidStrings) <- wToGV t
+                      let kEdge = makeEdge myID kidID
+                      return (myID, self:kEdge:kidStrings)
+
+wToGV :: WeaveTree a -> IDGen (Int, [String])
+wToGV (WLeaf t) = do
+  myID <- genID
+  let self = makeNode myID [cGreen] "WLeaf"
+  (kidID, kidStrings) <- tToGV t
+  let kidEdge = makeEdge myID kidID
+  return (myID, self:kidEdge:kidStrings)
+wToGV (WNode lbl _ wps) = do
+  myID <- genID
+  let self = makeNode myID [cGreen] ("WNode:"++(gvShowLabel lbl))
+  processed <- mapM wpToGV wps
+  let (kIDs, kSs) = unzip processed
+      kidEdges = map (makeEdge myID) kIDs
+  return (myID, self:(kidEdges++(concat kSs)))
 
 -- | This code is taken from the compose-hpc rulegen:
 {-|
