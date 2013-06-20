@@ -468,7 +468,6 @@ weaveTerms dir = do
           Nothing -> return ()
     Nothing -> return ()
 
--- weaveSh :: Archive -> GitDiffArgs -> Either String (Term, Subs, Subs)
 weaveSh archive gda = do
   let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
       termAfterFilePath  = fromText (gdaAfterCommit gda)  </> replaceExtension (fromText (gdaFilePath gda)) "trm"
@@ -477,13 +476,11 @@ weaveSh archive gda = do
   case (mb_tb, mb_ta) of
     (Just tb, Just ta) ->
       let termToTree t = atermToTree (getATerm t) t
-          termBefore   = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
-          termAfter    = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
-      in case (termBefore,termAfter) of
-         (term1,term2) -> let (y1,y2) = treediff termBefore termAfter (==)
-                              w       = weave y1 y2 False
-                          in Right w
-         _             -> Left "Filter return Nothing"
+          termBefore   = termToTree (readATerm (BL.unpack (fromEntry tb)))
+          termAfter    = termToTree (readATerm (BL.unpack (fromEntry ta)))
+          (y1,y2)      = treediff termBefore termAfter (==)
+          w            = weave y1 y2 False
+      in Right w
     _ -> Left "Failed to load terms"
 
 -----------------------------------------------------------------------
