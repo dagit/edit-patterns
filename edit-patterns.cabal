@@ -15,6 +15,7 @@ executable edit-patterns
   main-is:             Main.hs
   other-modules:       JavaATerms
                      , CATerms
+                     , WeaveUtils
   build-depends:       base >= 3 && < 5
                      , containers
                      , mtl

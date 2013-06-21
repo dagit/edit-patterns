@@ -36,6 +36,7 @@ import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.IO hiding (FilePath)
+import WeaveUtils
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as M
