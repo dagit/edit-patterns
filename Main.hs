@@ -1,16 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
-module Main
-( main
-)where
+module Main where
 
 -- External dependencies imports
 
+-- import CATerms
+-- import Filesystem hiding (writeFile, readFile, withFile, openFile)
+-- import Language.Java.Pretty
+-- import Language.Java.Syntax
+-- import qualified Filesystem as FS
 import ATerm.AbstractSyntax
 import ATerm.Generics as G
 import ATerm.ReadWrite
 import ATerm.Unshared
-import CATerms
 import Codec.Archive.Zip
 import Control.Applicative
 import Control.Exception.Base
@@ -25,12 +27,9 @@ import Data.Tree.AntiUnification
 import Data.Tree.Types
 import Data.Tree.Weaver
 import Data.Tree.Yang
-import Filesystem hiding (writeFile, readFile, withFile, openFile)
 import Filesystem.Path hiding (concat, (<.>))
-import JavaATerms
+import JavaATerms ()
 import Language.Java.Parser
-import Language.Java.Pretty
-import Language.Java.Syntax
 import Prelude hiding (FilePath)
 import Shelly hiding (FilePath, (</>),get,put)
 import System.Console.GetOpt
@@ -41,7 +40,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as LT
-import qualified Filesystem as FS
 
 -- Recommended by Shelly
 default (LT.Text)
@@ -73,18 +71,18 @@ options :: [ OptDescr (Options -> IO Options) ]
 options =
   [ Option "s" ["sandbox"]
     (ReqArg
-      (\arg opt -> return opt { optSandbox = fromString arg })
+      (\arg o -> return o { optSandbox = fromString arg })
       "DIRECTORY")
     "Directory for storing or reading aterms"
   , Option "v" ["verbose"]
     (NoArg
-      (\opt -> return opt { optVerbose = True }))
+      (\o -> return o { optVerbose = True }))
     "Enable verbose output"
   , Option "m" ["mode"]
     (ReqArg
-      (\arg opt -> do
+      (\arg o -> do
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
-        return opt { optMode = mode })
+        return o { optMode = mode })
       "MODE")
     "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, graphviz, unparse, weave"
   , Option "h" ["help"]
@@ -334,9 +332,7 @@ antiUnifySh archive gda = do
       let termToTree t = atermToTree (getATerm t) t
           termBefore   = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry tb))))
           termAfter    = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
-      in case (termBefore,termAfter) of
-         (term1,term2) -> Right (term1 `antiunify` term2)
-         _             -> Left "Filter return Nothing"
+      in Right (termBefore `antiunify` termAfter)
     _ -> Left "Failed to load terms"
 
 generateGraphs :: FilePath -> Sh ()
@@ -361,7 +357,7 @@ generateGraphs dir = do
           let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
           case term of
             Nothing        -> return ()
-            Just (t,s1,s2) -> do
+            Just (_,s1,s2) -> do
               let destPath = "/tmp/dagit" </> directory (fromString h)
               mkdir_p destPath
               makeGraphFromSubs (destPath </> filename (fromString h) <.> "s1") s1
@@ -375,6 +371,7 @@ makeGraphFromSubs fp subs = do
       o k = (LT.unpack (toTextIgnore fp)) ++ "-" ++ k ++ ".gv"
   forM_ cs (\(k,v) -> liftIO (writeFile (o k) (concat ["digraph {\n",v,"}"])))
   where extractName (Node (LBLString n) _) = n
+        extractName _                      = ""
         extractMap (Subs t) = t
 
 unparseTerms :: FilePath -> Sh ()
@@ -399,19 +396,20 @@ unparseTerms dir = do
           let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
           case term of
             Nothing        -> return ()
-            Just (t,s1,s2) -> do
+            Just (_,s1,s2) -> do
               let destPath = "/tmp/dagit" </> directory (fromString h)
               mkdir_p destPath
-              term2src (destPath </> filename (fromString h) <.> "s1") s1 >>= liftIO . putStrLn 
-              term2src (destPath </> filename (fromString h) <.> "s2") s2 >>= liftIO . putStrLn 
+              term2src s1 >>= liftIO . putStrLn 
+              term2src s2 >>= liftIO . putStrLn 
 
-term2src :: FilePath -> Subs -> Sh String
-term2src fp subs = do
+term2src :: Subs -> Sh String
+term2src subs = do
   let ps = M.assocs (extractMap subs)
       gs = map (\(k,v) -> (extractName k, treeToATerm v)) ps
       cs = map (\(k,v) -> (k, getATermFull v)) gs
   return (show cs)
   where extractName (Node (LBLString n) _) = n
+        extractName _                      = ""
         extractMap (Subs t) = t
 
 weaveTerms :: FilePath -> Sh ()
@@ -445,20 +443,22 @@ weaveTerms dir = do
                     liftIO (putStrLn ("weave using " ++ show gda))
                     let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
                         weaveFilePath       = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
-                        weave               = weaveSh archive gda
-                    case weave of
+                        woven               = weaveSh archive gda
+                    case woven of
                       -- Something went wrong
                       Left e  -> liftIO (putStrLn e)
                       Right w -> do
-                         let entry      = toEntry (LT.unpack (toTextIgnore weaveFilePath)) 0 (BL.pack (show w))
-                             destPath   = "/tmp/dagit" </> directory weaveFilePath
-                             outfp      = LT.unpack (toTextIgnore (destPath </> (filename (replaceExtension weaveFilePath "gv"))))
-                             gv         = concat ["digraph {\n",unlines (wtreeToGraphviz w),"}"]
-                             newArchive = entry `addEntryToArchive` archive
+                         let destPath   = "/tmp/dagit" </> directory weaveFilePath
+                             outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` LT.pack (show x))) <.> "gv" | x <- [(1::Integer)..]]
+                             outfp      = destPath </> (filename (replaceExtension weaveFilePath "gv"))
+                             mkGV l     = concat ["digraph {\n", unlines l,"}"]
+                             gvs        = map (mkGV . treeToGraphviz) (extract w)
                          mkdir_p destPath
-                         liftIO (putStrLn ("Writing: " ++ outfp))
-                         liftIO (writeFile outfp gv)
-                         liftIO (putStrLn ("Wrote weave to: " ++ outfp))
+                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outfps) gvs)
+                                       (\(fp,gv) -> do
+                                         putStrLn ("Writing: " ++ fp)
+                                         writeFile fp gv
+                                         putStrLn ("Wrote weave to: " ++ fp)))
                   else return ())
                 -- Log the error and move on
                 (\e -> do
@@ -468,6 +468,7 @@ weaveTerms dir = do
           Nothing -> return ()
     Nothing -> return ()
 
+weaveSh :: IsString a => Archive -> GitDiffArgs -> Either a (WeaveTree Bool)
 weaveSh archive gda = do
   let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
       termAfterFilePath  = fromText (gdaAfterCommit gda)  </> replaceExtension (fromText (gdaFilePath gda)) "trm"
