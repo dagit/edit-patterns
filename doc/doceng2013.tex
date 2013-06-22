@@ -1,5 +1,7 @@
 \documentclass{acm_proc_article-sp}
 
+\newcommand{\claim}[1]{#1}
+
 \begin{document}
 
 \title{Looking for historical patterns }
@@ -83,8 +85,44 @@ VCS History. Structural tree diff. Antiunification. Patterns.
 \keywords{ACM proceedings, \LaTeX, text tagging} % NOT required for Proceedings
 
 \section{Introduction}
-Intro here.
+%% 1. Describe the problem
 
+We would like to be able to characterize the changes to files in a software
+project according to the type of change that they represent.  For example, in
+an operating system kernel, a set of drivers may need to be updated to use a
+new mutual exclusion mechanism. In this example, blocks of code that access
+specific resources need to be updated to take a semaphore before proceeding.
+
+Finding common patterns for the changes to a source file gives us the ability
+to understand, at a higher level, what sorts of revisions are happening. If we
+already know to look for changes to semaphore handling we may think to use a
+textual search tool, such as {\tt grep}, to search the source code for
+functions related to semaphores. Instead, suppose we have the challenge that we
+are not familiar with the source code and we would like to understand at a
+structural level what types of changes were needed to add support for the new
+semaphores.
+
+Furthermore, 
+
+\claim{Finding edit patterns in source code is a hard problem.}
+
+%% 2. State our contributions
+
+Our contributions are:
+\begin{itemize}
+
+\item We show that tree based antiunification can for the basis for
+highlighting edit patterns in tree structured data.  In particular, we analyze
+the tree structure of parsed source code found in version control history to
+find edit patterns.
+
+
+\end{itemize}
+
+What AntiUnification gets us: Antiunification takes two trees and gives us the
+common tree structure with ``holes'' and a set of substitutions for each hole
+so that we can reconstruct the two input trees. We begin by examining the tree
+structure of the substitions.
 
 \subsection{Citations}
 
