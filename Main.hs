@@ -425,7 +425,7 @@ weaveTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      forM_ ds $ \(commitBefore,commitAfter) -> do
+      ps <- flipFoldM (take 100 ds) [] $ \ps (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
@@ -436,7 +436,7 @@ weaveTerms dir = do
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will weave them separately
-            forM_ gdas $ \gda -> do
+            flipFoldM gdas ps $ \prevPs gda -> do
               catchany_sh
                 -- Make sure we can process this file
                 (if fileFilter (gdaFilePath gda)
@@ -447,26 +447,41 @@ weaveTerms dir = do
                         woven               = weaveSh archive gda
                     case woven of
                       -- Something went wrong
-                      Left e  -> liftIO (putStrLn e)
+                      Left e  -> liftIO (putStrLn e) >> return prevPs
                       Right w -> do
                          let destPath   = "/tmp/dagit" </> directory weaveFilePath
                              outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` LT.pack (show x))) <.> "gv" | x <- [(1::Integer)..]]
                              outfp      = destPath </> (filename (replaceExtension weaveFilePath "gv"))
                              mkGV l     = concat ["digraph {\n", unlines l,"}"]
                              gvs        = map (mkGV . treeToGraphviz) (extract w)
+                             size :: SizedTree a -> Int
+                             size (Node (_,s) _) = s
+                             ps'        = let ws = extract w
+                                          in zip ws (map (size . toSizedTree) ws)
                          mkdir_p destPath
                          liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outfps) gvs)
                                        (\(fp,gv) -> do
                                          putStrLn ("Writing: " ++ fp)
                                          writeFile fp gv
                                          putStrLn ("Wrote weave to: " ++ fp)))
-                  else return ())
+                         return (prevPs ++ ps')
+                  else return prevPs)
                 -- Log the error and move on
                 (\e -> do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
-                  return ())
-          Nothing -> return ()
+                  return prevPs)
+          Nothing -> return []
+      let dists :: [(LabeledTree,Int)] -> [Double]
+          dists ts   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral s1
+                       | (t1,s1) <- ts, (t2,_) <- ts ]
+          chunk :: Int -> [a] -> [[a]]
+          chunk _ [] = []
+          chunk n xs = take n xs : chunk n (drop n xs)
+          csvShow xs = unlines (map csvShow' xs)
+            where
+            csvShow' ys = intercalate "," (map show ys)
+      liftIO (putStrLn (csvShow (chunk (length ps) (dists ps))))
     Nothing -> return ()
 
 weaveSh :: IsString a => Archive -> GitDiffArgs -> Either a (WeaveTree Bool)
