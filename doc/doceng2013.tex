@@ -71,6 +71,7 @@ Matthew Sottile\\
 \maketitle
 \begin{abstract}
 VCS History. Structural tree diff. Antiunification. Patterns.
+Awesomeness.
 \end{abstract}
 
 % TODO: edit categories
@@ -175,37 +176,60 @@ cluster of difference tress.
 Finally, once the set of differences are grouped into clusters of trees that
 are similar up to the threshold, we perform antiunification on the entire
 cluster to distill all members to a representative code pattern for the
-cluster.  The antiunification algorithm as described by WHO~\cite{antiu} as
-part of the clonedigger project was used, which itself is an implementation of
-the classical antiunitification algorithm of THATGUY~\cite{who}.
+cluster.  The antiunification algorithm as described by
+Bulychev~\cite{bulychev08dupe} as part of the clonedigger project
+was used, which itself is an implementation of the classical antiunitification
+algorithm of Reynolds~\cite{reynolds69antiunification}.
 
 In the following sections, we descibe the steps above in greater detail.
 
 \subsection{Parsing and aterm generation}
 
+One of the most challenging aspects of performing this kind of
+study on arbitrary software packages is the availability of
+robust language parsing tools.  In the absence of a common intermediate
+representation or abstract syntax representation for popular languages, 
+we adopted a standardized serialization format in the form of annotated
+terms.  Generation of aterms was achieved via language-specific parsers.
+In this work, we used the language-java and language-c parsers available
+as open source libraries accessible via the Haskell programming language.
+
+More on this stuff here.  Language to Aterm mapping details.
+
 \subsection{Structural differencing}
 
 Related work on structural change detection~\cite{chawathe96change}.  Tree
-diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand}.  
+diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very
+related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
+need to quickly re-scan these to see the overlap.
 
 \subsection{Tree similarity metric}
 
+Given two trees $t_1$ and $t_2$, we would like to define a similarity metric
+such that $d(t_1, t_2) \in [0,1]$, where a similarity of $1$ means that the
+trees are identical, and $0$ represents maximal dissimilarity.  In Yang's
+algorithm, a similarity score is provided for comparing $t_a$ and $t_b$. This
+metric is order dependent, forcing the maximal score to be the size of the
+first tree ($t_a$), even if $t_b$ is larger.  If the trees are identical, the
+score will be exactly $|t_a|$, the number of nodes in $t_a$.  If they differ,
+it will be strictly less than $|t_a|$.  As such, we define our distance
+function to be $\frac{d(t_a, t_b)}{|t_a|}$.  This operator is not commutative,
+since it is easy to find instances such that $\frac{d(t_b, t_a)}{|t_b|} \neq
+\frac{d(t_a, t_b)}{|t_a|}$ when the trees are very different.
+
 \subsection{Anti-unification and template generation}
 
-\subsection{Citations}
-
-\subsection{Tables}
-
-\subsection{Figures}
-
 \section{Conclusions}
+
+I conclude that this work kicked ass.
+
 \section{Acknowledgments}
-This section is optional; it is a location for you
-to acknowledge grants, funding, editing assistance and
-what have you.  In the present case, for example, the
-authors would like to thank Gerald Murray of ACM for
-his help in codifying this \textit{Author's Guide}
-and the \textbf{.cls} and \textbf{.tex} files that it describes.
+
+This work was supported in part by the US Department of
+Energy Office of Science, Advanced Scientific Computing Research
+contract no. XX-YYYYYYYYYY.  Additional support was provided by Galois,
+Inc.
+
 %\end{document}  % This is where a 'short' article might terminate
 
 %ACKNOWLEDGMENTS are optional
