@@ -203,7 +203,7 @@ diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very
 related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
 need to quickly re-scan these to see the overlap.
 
-\subsection{Tree similarity metric}
+\subsection{Tree similarity metric and clustering}
 
 Given two trees $t_1$ and $t_2$, we would like to define a similarity metric
 such that $d(t_1, t_2) \in [0,1]$, where a similarity of $1$ means that the
@@ -217,7 +217,44 @@ function to be $\frac{d(t_a, t_b)}{|t_a|}$.  This operator is not commutative,
 since it is easy to find instances such that $\frac{d(t_b, t_a)}{|t_b|} \neq
 \frac{d(t_a, t_b)}{|t_a|}$ when the trees are very different.
 
+Once we have the set of changes that were detected from the VCS history,
+we can generate a forest of trees $t_1, \cdots, t_n$ such that we can
+compute the $n^2$ distances between all pairs to generate a distance matrix
+$D$ where $D_{ij} = d(t_i, t_j)$.  Given a threshold value $\tau$, we can
+produce a boolean matrix $D'$ where $D'_{ij} = d(t_i, t_j) > \tau$.  An
+example matrix is shown in Figure~\ref{fig:boolmat} for changes observed
+in the VCS for PROJECT X where $\tau = 0.9$.  
+
+Given such a matrix, we would like to use information from the Yang
+differencing algorithm to distinguish what kind of change each subtree
+represents.  Three possibilities exist: a code insertion (a ``left-hole''),
+code deletion (a ``right-hole''), and code mutation (a ``mismatch'').  Adding
+this information to the difference matrix is important as it allows us to
+further refine our view of the code evolution to distinguish code changes from
+the insertion or removal of code that occurs over time. For example, when code
+is being developed and grown, we expect to see a number of code insertions.
+Similarly, when a mass refactoring occurs to simplify code, we would expect to
+see a set of code deletions.  When a more subtle refinement occurs, such as
+transposition of  code arguments or the addition of a conditional to refine
+control flow, we would expect to see mismatches where the tree changes in a
+way where the structural change can be thought of as a  coupled deletion and
+insertion operation (such as changing a variable name in an expression).
+
 \subsection{Anti-unification and template generation}
+
+Once we have clusters of related code snippets in the form of related
+subtrees, we can seek patterns that relate changes.  For example, say we have
+a function call $foo()$ where each invocation of the function uses the same
+parameters (e.g, $foo(x,y)$, where $x$ and $y$ are always the same). If we add
+a new parameter at the end of each call where the variable passed in differs
+each time (e.g., $foo(x,y,a)$ and $foo(x,y,b)$), we would like to abstract out
+this change as $foo(x,y,VAR)$, where each instance of the change replaces
+$VAR$ with whatever concrete variable is used at that point.  The anti-unification
+algorithm is built for this purpose -- given two trees, it seeks the least-general
+generalization of the pair and produces a triplet representing the generalized tree with
+a metavariable introduced where the two differ, as well as a substitution set that allows
+the metavariable to be replaced with the appropriate concrete subtree necessary to
+reconstitute the two trees that were antiunified.
 
 \section{Conclusions}
 
