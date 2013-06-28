@@ -425,7 +425,7 @@ weaveTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      ps <- flipFoldM (take 100 ds) [] $ \ps (commitBefore,commitAfter) -> do
+      (_,ps) <- flipFoldM (take 100 ds) (1,[]) $ \(count,ps) (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
@@ -436,7 +436,7 @@ weaveTerms dir = do
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will weave them separately
-            flipFoldM gdas ps $ \prevPs gda -> do
+            flipFoldM gdas (count,ps) $ \(prevCount,prevPs) gda -> do
               catchany_sh
                 -- Make sure we can process this file
                 (if fileFilter (gdaFilePath gda)
@@ -447,10 +447,10 @@ weaveTerms dir = do
                         woven               = weaveSh archive gda
                     case woven of
                       -- Something went wrong
-                      Left e  -> liftIO (putStrLn e) >> return prevPs
+                      Left e  -> liftIO (putStrLn e) >> return (prevCount,prevPs)
                       Right w -> do
                          let destPath   = "/tmp/dagit" </> directory weaveFilePath
-                             outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` LT.pack (show x))) <.> "gv" | x <- [(1::Integer)..]]
+                             outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` "-" `LT.append` LT.pack (show x))) <.> "gv" | x <- [(prevCount::Int)..]]
                              outfp      = destPath </> (filename (replaceExtension weaveFilePath "gv"))
                              mkGV l     = concat ["digraph {\n", unlines l,"}"]
                              gvs        = map (mkGV . treeToGraphviz) (extract w)
@@ -464,14 +464,14 @@ weaveTerms dir = do
                                          putStrLn ("Writing: " ++ fp)
                                          writeFile fp gv
                                          putStrLn ("Wrote weave to: " ++ fp)))
-                         return (prevPs ++ ps')
-                  else return prevPs)
+                         return (prevCount+length ps',(prevPs ++ ps'))
+                  else return (prevCount,prevPs))
                 -- Log the error and move on
                 (\e -> do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
-                  return prevPs)
-          Nothing -> return []
+                  return (prevCount,prevPs))
+          Nothing -> return (1,[])
       let dists :: [(LabeledTree,Int)] -> [Double]
           dists ts   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral s1
                        | (t1,s1) <- ts, (t2,_) <- ts ]
