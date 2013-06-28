@@ -4,7 +4,7 @@
 
 \begin{document}
 
-\title{Looking for historical patterns }
+\title{Looking for historical development patterns via version control}
 \subtitle{[Extended Abstract]
 \titlenote{A full version of this paper is available as
 \textit{Author's Guide to Preparing ACM SIG Proceedings Using
@@ -87,8 +87,15 @@ VCS History. Structural tree diff. Antiunification. Patterns.
 \section{Introduction}
 %% 1. Describe the problem
 
+Version control systems (VCS's) track the evolution of software over time in the form
+of a sequence of changes to the plain text representation of the code.
 We would like to be able to characterize the changes to files in a software
-project according to the type of change that they represent.  For example, in
+project according to the type of change that they represent.  The ability to
+map these changes to the syntax of the language, instead of its raw text
+representation, will allow them to be understood in terms of the language
+constructs themselves.  Doing so will allow us to identify patterns of
+changes at the abstract syntax level to support insight at a deeper level
+than achievable by examining raw text differences.  For example, in
 an operating system kernel, a set of drivers may need to be updated to use a
 new mutual exclusion mechanism. In this example, blocks of code that access
 specific resources need to be updated to take a semaphore before proceeding.
@@ -108,21 +115,82 @@ Furthermore,
 
 %% 2. State our contributions
 
-Our contributions are:
+Our contributions described in this work are:
+
 \begin{itemize}
 
-\item We show that tree based antiunification can for the basis for
-highlighting edit patterns in tree structured data.  In particular, we analyze
-the tree structure of parsed source code found in version control history to
-find edit patterns.
+\item We show that structural differencing algorithms that operate on the abstract
+syntax tree or parse tree of a language can be used to map text differences stored in
+a VCS to a form where syntactic changes can be reasoned about.
 
+\item We show that the anti-unification algorithm of BLAH can be used to map
+similar changes to a generalized change pattern.
+
+\item We show that clustering by a tree similarity metric allows differences to be grouped
+such that the families of changes to generalize via anti-unification can be inferred from
+the differences using a basic similarlity threshold.
 
 \end{itemize}
 
-What AntiUnification gets us: Antiunification takes two trees and gives us the
-common tree structure with ``holes'' and a set of substitutions for each hole
-so that we can reconstruct the two input trees. We begin by examining the tree
-structure of the substitions.
+In this paper, we briefly describe the building blocks of our work and show preliminary results
+of this methodology as applied to version control repositories for open source projects available
+online.  The projects studied in this paper are X, Y, and Z.  In lieu of a stand-alone discussion of
+related work, we will present the work that we have based our research on inline with the associated
+topics.
+
+\section{Methodology}
+
+We propose the following workflow for studying software evolution via VCS
+data.  First, each version of all source files in the project are
+reconstituted from the differences stored within the VCS such that each
+version of a file can be parsed by an appropriate language front end.  Each
+front-end is configured to map the parsed code to an annotated term (or,
+aterm)~\cite{brand00aterm} that represents a standardized serialization of the parse
+tree or abstract syntax tree.  Mapping languages to a common aterm format allows
+the downstream portions of our workflow to be language-agnostic to a large degree,
+with minimal language-specific parameterization.  
+
+Once we have code in an aterm format, we can then apply a structural
+differencing algorithm between adjacent versions of each source file (e.g.,
+version $n$ of file $f$ is compared to version $n+1$ of file $f$).  The result
+of this is a forest of trees that represent the portions of the AST of file
+$f$ that changed between versions at the structural level.  These changes can
+either be code insertions, deletions, or mutations.  Our differencing is based
+on the work of Yang~\cite{yang91diff} whose algorithm was designed for computing
+differences between source code versions.  Yang's goal was to improve the
+visual presentation of differences in textual diff tools, and our use of their
+algorithm to provide input to further tree analysis algorithms is novel.
+
+After reducing the sequence of differences stored in the VCS, we have a large
+forest of trees each representing a change that occurred over the evolution of
+the software.  At this point, we seek to relate each of these trees via a 
+tree similarity metric.  This is achieved by using Yang's algorithm a second time,
+but in this case we ignore the sequence of edit operations that it produces and
+simply consume the quantitative similarity metric that it produces as a rough
+estimate of how closely related two trees are.  (TODO: where to discuss the fact that
+this is not a commutative operator).  A threshold parameter is defined in which
+two trees with a similarity above the threshold are considered to be part of the same
+cluster of difference tress.
+
+Finally, once the set of differences are grouped into clusters of trees that
+are similar up to the threshold, we perform antiunification on the entire
+cluster to distill all members to a representative code pattern for the
+cluster.  The antiunification algorithm as described by WHO~\cite{antiu} as
+part of the clonedigger project was used, which itself is an implementation of
+the classical antiunitification algorithm of THATGUY~\cite{who}.
+
+In the following sections, we descibe the steps above in greater detail.
+
+\subsection{Parsing and aterm generation}
+
+\subsection{Structural differencing}
+
+Related work on structural change detection~\cite{chawathe96change}.  Tree
+diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand}.  
+
+\subsection{Tree similarity metric}
+
+\subsection{Anti-unification and template generation}
 
 \subsection{Citations}
 
