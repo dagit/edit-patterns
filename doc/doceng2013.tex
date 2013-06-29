@@ -4,12 +4,8 @@
 
 \begin{document}
 
-\title{Looking for historical development patterns via version control}
-\subtitle{[Extended Abstract]
-\titlenote{A full version of this paper is available as
-\textit{Author's Guide to Preparing ACM SIG Proceedings Using
-\LaTeX$2_\epsilon$\ and BibTeX} at
-\texttt{www.acm.org/eaddress.htm}}}
+\title{Historical development pattern identification via version control}
+
 %
 % You need the command \numberofauthors to handle the 'placement
 % and alignment' of the authors beneath the title.
@@ -63,7 +59,7 @@ Matthew Sottile\\
        \affaddr{Portland, OR}\\
        \email{mjsottile@gmail.com}
 }
-\date{30 June 2013}
+\date{4 July 2013}
 % Just remember to make sure that the TOTAL number of authors
 % is the number that will appear on the first page PLUS the
 % number that will appear in the \additionalauthors section.
@@ -72,15 +68,21 @@ Matthew Sottile\\
 \begin{abstract}
 
 Traditional algorithms for detecting differences in source code focus on
-differences between lines. We propose to use the structure of the program
-source to identify structural changes over the history of a software project.
-We use a tree differencing algorithm on revisions stored in a Version Control
-System (VCS) to identify structral changes. Once we have extracted the
-structural differences we apply similarity metrics to find related changes. By
-applying antiunification to similar changes we are able to generalize from
-concrete changes to patterns of structural change. Furthermore, studying
-patterns of change at the structural level, instead of line-by-line, allows us
-to gain insight into the evolution of software.
+differences between lines.  As such, little can be learned about abstract
+changes that occur over time within a project.  Structural differencing on the
+program parse tree reveals changes at the syntactic level within code, which
+allows us to further process the differences to understand their meaning. We
+propose that clustering of changes by some metric of similarity, followed by
+pattern extraction via antiunification will allow us to identify patterns of
+change  within a software project from the sequence of changes contained
+within a Version Control System (VCS). Tree similarity metrics such as a tree
+edit distance can be used to cluster changes in order to identify families of
+similar changes that may represent a single class of change (e.g., adding a
+parameter to a function call). By applying antiunification to similar changes
+we are able to generalize from families of concrete changes to patterns of
+structural change. Studying patterns of change at the structural level,
+instead of line-by-line, allows us to gain insight into the evolution of
+software.
 
 \end{abstract}
 
@@ -90,10 +92,9 @@ to gain insight into the evolution of software.
 %A category including the fourth, optional field follows...
 \category{D.2.8}{Software Engineering}{Metrics}[complexity measures, performance measures]
 
-\terms{Theory} % TODO: changeme
+%\terms{Theory} % TODO: changeme
 
-%TODO: do I need this?
-\keywords{ACM proceedings, \LaTeX, text tagging} % NOT required for Proceedings
+\keywords{version control, structural differencing, anti-unification, software evolution}
 
 \section{Introduction}
 %% 1. Describe the problem
