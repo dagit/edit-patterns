@@ -453,7 +453,7 @@ weaveTerms dir = do
                              outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` "-" `LT.append` LT.pack (show x))) <.> "gv" | x <- [(prevCount::Int)..]]
                              outfp      = destPath </> (filename (replaceExtension weaveFilePath "gv"))
                              mkGV l     = concat ["digraph {\n", unlines l,"}"]
-                             gvs        = map (mkGV . treeToGraphviz) (extract w)
+                             gvs        = map (mkGV . eTreeToGraphviz) (extract2 w)
                              size :: SizedTree a -> Int
                              size (Node (_,s) _) = s
                              ps'        = let ws = extract w
@@ -540,7 +540,7 @@ wToGV :: WeaveTree a -> IDGen (Int, [String])
 wToGV (WLeaf t) = do
   myID <- genID
   let self = makeNode myID [cGreen] "WLeaf"
-  (kidID, kidStrings) <- tToGV t
+  (kidID, kidStrings) <- tToGV gvShowLabel t
   let kidEdge = makeEdge myID kidID
   return (myID, self:kidEdge:kidStrings)
 wToGV (WNode lbl _ wps) = do
@@ -556,25 +556,33 @@ wToGV (WNode lbl _ wps) = do
   Take a LabeledTree and return a list of lines for the
   corresponding graphviz DOT file.
 -}
-treeToGraphviz :: LabeledTree -- ^ Tree to print
+treeToGraphviz :: Show a => Tree a -- ^ Tree to print
                -> [String]    -- ^ DOT-file lines
-treeToGraphviz t = snd $ evalIDGen t tToGV
+treeToGraphviz t = snd $ evalIDGen t (tToGV show)
 --
 -- node attributes for different node types
 --
-tToGV :: LabeledTree -> IDGen (Int, [String])
-tToGV (Node label kids) = do
+tToGV :: (a -> String) -> Tree a -> IDGen (Int, [String])
+tToGV showIt (Node label kids) = do
   myID <- genID
-  let self = makeNode myID [cRed] (gvShowLabel label)
-  processedKids <- mapM tToGV kids
+  --let self = makeNode myID [cRed] (gvShowLabel label)
+  let self = makeNode myID [cRed] (showIt label)
+  processedKids <- mapM (tToGV showIt) kids
   let (kidIDs, kidStrings) = unzip processedKids
       kidEdges = map (makeEdge myID) kidIDs
   return (myID, self:(kidEdges++(concat kidStrings)))
 
+eTreeToGraphviz :: Tree (Label,Maybe MismatchType) -> [String]
+eTreeToGraphviz t = snd $ evalIDGen t (tToGV gvShowLabelMismatch)
+
 gvShowLabel :: Label -> String
 gvShowLabel (LBLString s) = s
-gvShowLabel (LBLList)     = "LIST"
-gvShowLabel (LBLInt i)    = show i
+gvShowLabel (LBLList    ) = "LIST"
+gvShowLabel (LBLInt i   ) = show i
+
+gvShowLabelMismatch :: (Label,Maybe MismatchType) -> String
+gvShowLabelMismatch (l, Just m)  = gvShowLabel l ++ ": " ++ show m
+gvShowLabelMismatch (l, Nothing) = gvShowLabel l
 
 -- use state monad for generating unique identifiers
 type IDGen = State Int
