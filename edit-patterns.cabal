@@ -32,6 +32,7 @@ executable edit-patterns
                      , language-java
                      , language-c
                      , ghc-prim
+                     , matrix
   hs-source-dirs:      .
                      , src
 

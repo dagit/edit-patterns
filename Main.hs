@@ -56,6 +56,7 @@ data Options = Options
 data Mode
   = GenerateATerms
   | AntiUnifyATerms
+  | AntiUnifyGroup
   | Graphviz
   | Unparse
   | Weave
@@ -85,7 +86,7 @@ options =
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
         return o { optMode = mode })
       "MODE")
-    "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, graphviz, unparse, weave"
+    "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, antiunify-group, graphviz, unparse, weave"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -98,6 +99,7 @@ options =
 parseMode :: String -> Maybe Mode
 parseMode "generate-aterms"  = Just GenerateATerms
 parseMode "antiunify-aterms" = Just AntiUnifyATerms
+parseMode "antiunify-group"  = Just AntiUnifyGroup
 parseMode "graphviz"         = Just Graphviz
 parseMode "unparse"          = Just Unparse
 parseMode "weave"            = Just Weave
@@ -122,13 +124,14 @@ data GitDiffArgs = GitDiffArgs
 main :: IO ()
 main = do
   args <- getArgs
-  let (actions, _, _) = getOpt RequireOrder options args
+  let (actions, rest, _) = getOpt RequireOrder options args
   opts <- foldl (>>=) (return defaultOptions) actions
   let verbosity = if optVerbose opts then verbosely else silently
   shelly $ verbosity $ do
     case optMode opts of
       GenerateATerms  -> generateTerms (optSandbox opts)
       AntiUnifyATerms -> processTerms  (optSandbox opts)
+      AntiUnifyGroup  -> antiUnifyTerms (optSandbox opts) (map read rest)
       Graphviz        -> generateGraphs (optSandbox opts)
       Unparse         -> unparseTerms (optSandbox opts)
       Weave           -> weaveTerms (optSandbox opts)
@@ -324,8 +327,10 @@ processTerms dir = do
 -- computes the antiunfication and returns the results
 antiUnifySh :: Archive -> GitDiffArgs -> Either String (Term, Subs, Subs)
 antiUnifySh archive gda = do
-  let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
-      termAfterFilePath  = fromText (gdaAfterCommit gda)  </> replaceExtension (fromText (gdaFilePath gda)) "trm"
+  let termBeforeFilePath = fromText (gdaBeforeCommit gda) </>
+                             replaceExtension (fromText (gdaFilePath gda)) "trm"
+      termAfterFilePath  = fromText (gdaAfterCommit gda)  </>
+                             replaceExtension (fromText (gdaFilePath gda)) "trm"
       mb_tb              = findEntryByPath (LT.unpack (toTextIgnore termBeforeFilePath)) archive
       mb_ta              = findEntryByPath (LT.unpack (toTextIgnore termAfterFilePath))  archive
   case (mb_tb, mb_ta) of
@@ -335,6 +340,37 @@ antiUnifySh archive gda = do
           termAfter    = replaceFileInfos (termToTree (readATerm (BL.unpack (fromEntry ta))))
       in Right (termBefore `antiunify` termAfter)
     _ -> Left "Failed to load terms"
+
+-- |Find all terms whose filename ends in one of the ids passed in
+-- eg., find . -name '*-id.trm', where id is one of the passed in ints
+antiUnifyTerms :: FilePath -> [Int] -> Sh ()
+antiUnifyTerms dir termIds = do
+  liftIO (putStrLn ("antiUnifyTerms: " ++ unwords (map  show termIds)))
+  -- findWhen :: (FilePath -> Sh Bool) -> FilePath -> Sh [FilePath]
+  fs <- findWhen match (dir </> fromString "weaves")
+  ts <- loadTerms fs
+  -- foldl' antiunify' :: Term -> [Term] -> Term
+  -- let t = foldl1' antiunify' ts
+  -- TODO: to be useful this bit of code needs to rename variables as it
+  -- folds and unions. Use the other version (antiunify') if you are just
+  -- going to ignore the substiutions anyway
+  -- let t = foldl1' antiunify'' (zip3 ts (repeat e) (repeat e))
+  --     e = Subs M.empty
+  if length ts < 1 then error "not enough terms to antiunify" else return ()
+  let (t,_)  = fromJust (antiunifyList ts)
+      gv     = (concat ["digraph {\n",unlines (treeToGraphviz t),"}"])
+  liftIO (writeFile "antiunify.gv" gv)
+  where
+  match :: FilePath -> Sh Bool
+  match fp = return (or [("-" ++ show i ++ ".trm") `isSuffixOf` LT.unpack (toTextIgnore fp) | i <- termIds])
+
+  loadTerms :: [FilePath] -> Sh [Term]
+  loadTerms = mapM loadTerm
+
+  loadTerm :: FilePath -> Sh Term
+  loadTerm fp = do
+    t <- liftIO (readATermFile (LT.unpack (toTextIgnore fp)))
+    return (atermToTree (getATerm t) t)
 
 generateGraphs :: FilePath -> Sh ()
 generateGraphs dir = do
@@ -425,7 +461,7 @@ weaveTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      (_,ps) <- flipFoldM (take 100 ds) (1,[]) $ \(count,ps) (commitBefore,commitAfter) -> do
+      (_,ps,ts) <- flipFoldM (take 100 ds) (1,[],[]) $ \(count,ps,ts) (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
@@ -436,7 +472,7 @@ weaveTerms dir = do
           Just gdas -> do
             liftIO (putStrLn ("Found gdas.hs"))
             -- For each GitDiffArg we will weave them separately
-            flipFoldM gdas (count,ps) $ \(prevCount,prevPs) gda -> do
+            flipFoldM gdas (count,ps,ts) $ \(prevCount,prevPs,prevTs) gda -> do
               catchany_sh
                 -- Make sure we can process this file
                 (if fileFilter (gdaFilePath gda)
@@ -447,41 +483,54 @@ weaveTerms dir = do
                         woven               = weaveSh archive gda
                     case woven of
                       -- Something went wrong
-                      Left e  -> liftIO (putStrLn e) >> return (prevCount,prevPs)
+                      Left  e -> liftIO (putStrLn e) >> return (prevCount,prevPs,prevTs)
                       Right w -> do
-                         let destPath   = "/tmp/dagit" </> directory weaveFilePath
-                             outfps     = [directory outfp </> (fromText (toTextIgnore (basename outfp) `LT.append` "-" `LT.append` LT.pack (show x))) <.> "gv" | x <- [(prevCount::Int)..]]
-                             outfp      = destPath </> (filename (replaceExtension weaveFilePath "gv"))
-                             mkGV l     = concat ["digraph {\n", unlines l,"}"]
-                             gvs        = map (mkGV . eTreeToGraphviz) (extract2 w)
-                             size :: SizedTree a -> Int
-                             size (Node (_,s) _) = s
-                             ps'        = let ws = extract w
-                                          in zip ws (map (size . toSizedTree) ws)
+                         let destPath  = "weaves" </> directory weaveFilePath
+                             outfp     = destPath </> (filename (replaceExtension weaveFilePath "gv"))
+                             outgvfps  = [directory outfp </>
+                                           (fromText (toTextIgnore (basename outfp) `LT.append`
+                                           "-" `LT.append` LT.pack (show x))) <.> "gv"
+                                         | x <- [(prevCount::Int)..]]
+                             outtrmfps = [directory outfp </>
+                                           (fromText (toTextIgnore (basename outfp) `LT.append`
+                                           "-" `LT.append` LT.pack (show x))) <.> "trm"
+                                         | x <- [(prevCount::Int)..]]
+                             mkGV l    = concat ["digraph {\n", unlines l,"}"]
+                             gvs       = map (mkGV . eTreeToGraphviz) ws'
+                             ws'       = extract2 w
+                             terms     = map treeToATerm (extract w) 
+                             ts'       = map treeType ws'
+                             ps'       = let ws = extract w
+                                         in zip ws (map (size . toSizedTree) ws)
+                         if length ps' /= length ts' then error "ps' /= ts'" else return ()
                          mkdir_p destPath
-                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outfps) gvs)
+                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outgvfps) gvs)
                                        (\(fp,gv) -> do
                                          putStrLn ("Writing: " ++ fp)
                                          writeFile fp gv
-                                         putStrLn ("Wrote weave to: " ++ fp)))
-                         return (prevCount+length ps',(prevPs ++ ps'))
-                  else return (prevCount,prevPs))
+                                         putStrLn ("Wrote graphviz of weave to: " ++ fp)))
+                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outtrmfps) terms)
+                                       (\(fp,term) -> do
+                                         putStrLn ("Writing: " ++ fp)
+                                         writeFile fp (writeSharedATerm term)
+                                         putStrLn ("Wrote aterm of weave to: " ++ fp)))
+                         return (prevCount+length ps',prevPs ++ ps',prevTs++ts')
+                  else return (prevCount,prevPs,prevTs))
                 -- Log the error and move on
                 (\e -> do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
-                  return (prevCount,prevPs))
-          Nothing -> return (1,[])
+                  return (prevCount,prevPs,prevTs))
+          Nothing -> return (1,[],[])
       let dists :: [(LabeledTree,Int)] -> [Double]
-          dists ts   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral s1
-                       | (t1,s1) <- ts, (t2,_) <- ts ]
-          chunk :: Int -> [a] -> [[a]]
-          chunk _ [] = []
-          chunk n xs = take n xs : chunk n (drop n xs)
+          dists xs   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral s1
+                       | (t1,s1) <- xs, (t2,_) <- xs ]
           csvShow xs = unlines (map csvShow' xs)
             where
             csvShow' ys = intercalate "," (map show ys)
-      liftIO (putStrLn (csvShow (chunk (length ps) (dists ps))))
+      if length ps /= length ts then error "ps /= ts" else return ()
+      liftIO (writeFile "treetypes.csv"      (intercalate "," (map (show.fromEnum') ts)))
+      liftIO (writeFile "treesimilarity.csv" (csvShow (chunk (length ps) (dists ps))))
     Nothing -> return ()
 
 weaveSh :: IsString a => Archive -> GitDiffArgs -> Either a (WeaveTree Bool)
@@ -556,9 +605,9 @@ wToGV (WNode lbl _ wps) = do
   Take a LabeledTree and return a list of lines for the
   corresponding graphviz DOT file.
 -}
-treeToGraphviz :: Show a => Tree a -- ^ Tree to print
+treeToGraphviz :: LabeledTree -- ^ Tree to print
                -> [String]    -- ^ DOT-file lines
-treeToGraphviz t = snd $ evalIDGen t (tToGV show)
+treeToGraphviz t = snd $ evalIDGen t (tToGV gvShowLabel)
 --
 -- node attributes for different node types
 --
@@ -691,4 +740,18 @@ replaceFileInfos t = replaceSubtrees (LBLString "file_info")
                                            ,Node (LBLInt    0)                       []
                                            ,Node (LBLInt    0)                       []])
                                      t
+size :: SizedTree a -> Int
+size (Node (_,s) _) = s
+
+treeType :: Tree (a,Maybe b) -> Maybe b
+treeType (Node (_,Just b)  _)    = Just b
+treeType (Node (_,Nothing) kids) = foldl' (<|>) Nothing (map treeType kids)
+
+chunk :: Int -> [a] -> [[a]]
+chunk _ [] = []
+chunk n xs = take n xs : chunk n (drop n xs)
+
+fromEnum' :: Enum a => Maybe a -> Int
+fromEnum' (Just a) = fromEnum a
+fromEnum' Nothing  = -1
 -----------------------------------------------------------------------

@@ -35,7 +35,7 @@ data MismatchType
   | MismatchTypeRight
   | LeftHoleType
   | RightHoleType
-  deriving (Read,Show,Eq,Ord)
+  deriving (Read,Show,Eq,Ord,Enum,Bounded)
 
 addInTree :: Tree a -> b -> Tree (a, b)
 addInTree (Node lbl kids) b = Node (lbl,b) (map (`addInTree` b) kids)
