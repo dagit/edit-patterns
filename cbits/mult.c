@@ -1,4 +1,4 @@
-void modexp(char * a, char * b, char * c, int sz, int y) {
+void mult(char * a, char * b, char * c, int sz, int y) {
   int i,j,k,ij,ik,kj;
   for(i = 0; i < sz; i++){
     for(j = 0; j < sz; j++){

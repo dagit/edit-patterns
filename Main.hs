@@ -29,7 +29,7 @@ import Data.Tree.Types
 import Data.Tree.Weaver
 import Data.Tree.Yang
 import Data.Vector (Vector)
-import Filesystem.Path hiding (concat, (<.>))
+import Filesystem.Path hiding (concat, (<.>), null)
 import Foreign.C.Types
 import Foreign.ForeignPtr
 import Foreign.Marshal.Array
@@ -56,9 +56,10 @@ default (T.Text)
 -----------------------------------------------------------------------
 -- * Option Parsing
 data Options = Options
-  { optVerbose :: Bool
-  , optSandbox :: FilePath
-  , optMode    :: Mode
+  { optVerbose   :: Bool
+  , optSandbox   :: FilePath
+  , optMode      :: Mode
+  , optThreshold :: Double
   }
 
 data Mode
@@ -73,9 +74,10 @@ data Mode
 
 defaultOptions :: Options
 defaultOptions = Options
-  { optVerbose = False
-  , optSandbox = "/tmp/dagit/version-patterns"
-  , optMode    = GenerateATerms
+  { optVerbose   = False
+  , optSandbox   = "/tmp/dagit/version-patterns"
+  , optMode      = GenerateATerms
+  , optThreshold = 0
   }
 
 options :: [ OptDescr (Options -> IO Options) ]
@@ -96,6 +98,13 @@ options =
         return o { optMode = mode })
       "MODE")
     "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, antiunify-group, graphviz, similarity, unparse, weave"
+  , Option "t" ["threshold"]
+    (ReqArg
+      (\arg o -> do
+        let threshold = read arg :: Double
+        threshold `seq` return o { optThreshold = threshold })
+      "THRESHOLD")
+    "Threshold for similarity, as a floating point value, in the range [0..1]"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -141,9 +150,9 @@ main = do
     case optMode opts of
       GenerateATerms  -> generateTerms (optSandbox opts)
       AntiUnifyATerms -> processTerms  (optSandbox opts)
-      AntiUnifyGroup  -> antiUnifyTerms (optSandbox opts) (map read rest)
+      AntiUnifyGroup  -> antiUnifyTerms (optSandbox opts) "antiunify.gv" (map read rest)
       Graphviz        -> generateGraphs (optSandbox opts)
-      Similarity      -> similarTrees (optSandbox opts)
+      Similarity      -> similarTrees (optSandbox opts) (optThreshold opts)
       Unparse         -> unparseTerms (optSandbox opts)
       Weave           -> weaveTerms (optSandbox opts)
 -----------------------------------------------------------------------
@@ -354,8 +363,8 @@ antiUnifySh archive gda = do
 
 -- |Find all terms whose filename ends in one of the ids passed in
 -- eg., find . -name '*-id.trm', where id is one of the passed in ints
-antiUnifyTerms :: FilePath -> [Int] -> Sh ()
-antiUnifyTerms dir termIds = do
+antiUnifyTerms :: FilePath -> String -> [Int] -> Sh ()
+antiUnifyTerms dir fname termIds = do
   liftIO (putStrLn ("antiUnifyTerms: " ++ unwords (map  show termIds)))
   -- findWhen :: (FilePath -> Sh Bool) -> FilePath -> Sh [FilePath]
   fs <- findWhen match (dir </> fromString "weaves")
@@ -370,7 +379,7 @@ antiUnifyTerms dir termIds = do
   if length ts < 1 then error "not enough terms to antiunify" else return ()
   let (t,_)  = fromJust (antiunifyList ts)
       gv     = (concat ["digraph {\n",unlines (treeToGraphviz t),"}"])
-  liftIO (writeFile "antiunify.gv" gv)
+  liftIO (writeFile fname gv)
   where
   match :: FilePath -> Sh Bool
   match fp = return (or [("-" ++ show i ++ ".trm") `isSuffixOf` T.unpack (toTextIgnore fp) | i <- termIds])
@@ -380,8 +389,9 @@ antiUnifyTerms dir termIds = do
 
   loadTerm :: FilePath -> Sh Term
   loadTerm fp = do
-    t <- liftIO (readATermFile (T.unpack (toTextIgnore fp)))
-    return (atermToTree (getATerm t) t)
+    cs <- liftIO (readFile (T.unpack (toTextIgnore fp)))
+    let t = readATerm cs
+    length cs `seq` return (atermToTree (getATerm t) t)
 
 generateGraphs :: FilePath -> Sh ()
 generateGraphs dir = do
@@ -472,7 +482,8 @@ weaveTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      (_,ps,ts) <- flipFoldM (take 100 ds) (1,[],[]) $ \(count,ps,ts) (commitBefore,commitAfter) -> do
+      -- TODO: make this 100 a parameter
+      (_,ps,ts) <- flipFoldM (take 100 ds) (0,[],[]) $ \(count,ps,ts) (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
@@ -532,10 +543,11 @@ weaveTerms dir = do
                   liftIO (putStr "Error processingTerms: ")
                   liftIO (putStrLn (show e))
                   return (prevCount,prevPs,prevTs))
-          Nothing -> return (1,[],[])
+          Nothing -> return (0,[],[])
       let dists :: [(LabeledTree,Int)] -> [Double]
-          dists xs   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral s1
-                       | (t1,s1) <- xs, (t2,_) <- xs ]
+          dists xs   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral(max s1 s2)
+                        -- fromIntegral (treedist t1 t2 (==))/fromIntegral s1
+                       | (t1,s1) <- xs, (t2,s2) <- xs ]
           csvShow xs = unlines (map csvShow' xs)
             where
             csvShow' ys = intercalate "," (map show ys)
@@ -561,18 +573,40 @@ weaveSh archive gda = do
     _ -> Left "Failed to load terms"
 
 
-similarTrees :: FilePath -> Sh ()
-similarTrees dir = do
+similarTrees :: FilePath -> Double -> Sh ()
+similarTrees dir thres = do
   let fp = T.unpack (toTextIgnore (dir </> "treesimilarity.csv"))
   cs <- liftIO (readFile fp)
   let csvDat = case parseCSV fp (dropTrailingNewline cs) of
-               Right c -> (map read) <$> c :: [[Double]]
+               Right c -> map read <$> c :: [[Double]]
                Left  e -> error (show e)
       d      = V.fromList (concat csvDat)
-      d2     = (>= 0.6) <$> d
+      d2     = (>= thres) <$> d
       sz     = length csvDat
-  d3 <- liftIO (modexp d2 sz sz)
-  liftIO (print d3)
+  -- d3 <- liftIO (modexp d2 sz sz)
+  let similarityMatrix = chunk sz (V.toList d2)
+      filterSimilar :: M.Map Int [Int] -> M.Map Int [Int]
+      filterSimilar m = M.fromList $ do
+        (i,rs) <- M.toAscList m
+        -- For some row i, we remove it if it appears in some
+        -- row j, with j > i
+        guard (and (map (\j -> i `notElem` (m M.! j))
+                        (filter (>i) (M.keys m))))
+        return (i,rs)
+
+      similar :: M.Map Int [Int]
+      similar = filterSimilar $ M.fromList $ do
+        (i,r) <- zip [0..] similarityMatrix
+        let js = [ j | j <- elemIndices True r
+                     , i /= j ]
+        guard (not (null js))
+        return (i,js)
+
+  -- liftIO (print similar)
+  liftIO (putStrLn ("Similarity threshold: " ++ show thres))
+  forM_ (M.toAscList similar) $ \(k,is) -> do
+    let set = k:sort is
+    antiUnifyTerms dir ("antiunify-" ++ show k ++ ".gv") set
 
   where
   -- horribly inefficient, but for some reason the csv parser
@@ -788,18 +822,42 @@ fromEnum' (Just a) = fromEnum a
 fromEnum' Nothing  = -1
 
 -- Haskell doesn't know C99's bool type, so we use CChar
-foreign import ccall "modexp" c_modexp :: Ptr CChar -> Ptr CChar -> Ptr CChar -> CInt -> CInt -> IO ()
+foreign import ccall "mult" c_mult :: Ptr CChar -> Ptr CChar -> Ptr CChar -> CInt -> IO ()
 
+true :: Int -> Int -> Vector Bool
+true nrs ncs = V.fromList (replicate (nrs*ncs) True)
+
+-- | Computes x ^ y for an sz by sz matrix where
+-- we use Bool as the field with 2 elements
 modexp :: Vector Bool -> Int -> Int -> IO (Vector Bool)
-modexp x sz y = do
+modexp _ sz 0 = return (true sz sz)
+modexp x sz y
+  | even y = do
+    z <- xx
+    mult z z sz
+  | otherwise = do
+    z  <- xx
+    z' <- mult z z sz
+    mult x z' sz
+  where xx = mult x x sz
+
+-- | Calculates an exponentiation of the matrix in the field with two elements.
+-- Take a square matrix as a vector, the size of the matrix in one dimension,
+-- the power to raise the matrix to and returns the result.
+mult :: Vector Bool -> Vector Bool -> Int -> IO (Vector Bool)
+mult x y sz = do
   let len = V.length x
       x'  = toChar <$> x
+      y'  = toChar <$> y
   a <- mallocForeignPtrBytes len
+  b <- mallocForeignPtrBytes len
   c <- mallocForeignPtrBytes len
   withForeignPtr a $ \ptrX -> do
-      pokeArray ptrX (V.toList x')
+    pokeArray ptrX (V.toList x')
+    withForeignPtr b $ \ptrY -> do
+      pokeArray ptrY (V.toList y')
       withForeignPtr c $ \ptrC -> do
-        c_modexp ptrX ptrX ptrC (fromIntegral sz) (fromIntegral y)
+        c_mult ptrX ptrY ptrC (fromIntegral sz)
         V.map toBool <$> V.fromList <$> peekArray len ptrC
   where
   toBool :: CChar -> Bool
