@@ -32,8 +32,11 @@ executable edit-patterns
                      , language-java
                      , language-c
                      , ghc-prim
-                     , matrix
+                     , csv
+                     , vector
   hs-source-dirs:      .
                      , src
+  c-sources: cbits/modexp.c
 
   ghc-options: -Wall -O2
+  ghc-prof-options: -fprof-auto -prof -rtsopts

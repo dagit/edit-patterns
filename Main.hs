@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE ExtendedDefaultRules     #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 module Main where
 
 -- External dependencies imports
@@ -27,7 +28,12 @@ import Data.Tree.AntiUnification
 import Data.Tree.Types
 import Data.Tree.Weaver
 import Data.Tree.Yang
+import Data.Vector (Vector)
 import Filesystem.Path hiding (concat, (<.>))
+import Foreign.C.Types
+import Foreign.ForeignPtr
+import Foreign.Marshal.Array
+import Foreign.Ptr
 import JavaATerms ()
 import Language.Java.Parser
 import Prelude hiding (FilePath)
@@ -36,14 +42,16 @@ import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.IO hiding (FilePath)
+import Text.CSV
 import WeaveUtils
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as M
-import qualified Data.Text.Lazy as LT
+import qualified Data.Text as T
+import qualified Data.Vector as V
 
 -- Recommended by Shelly
-default (LT.Text)
+default (T.Text)
 
 -----------------------------------------------------------------------
 -- * Option Parsing
@@ -60,6 +68,7 @@ data Mode
   | Graphviz
   | Unparse
   | Weave
+  | Similarity
   deriving (Read, Show, Eq, Ord)
 
 defaultOptions :: Options
@@ -86,7 +95,7 @@ options =
         let mode = fromMaybe (error "Unrecognized mode") (parseMode arg)
         return o { optMode = mode })
       "MODE")
-    "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, antiunify-group, graphviz, unparse, weave"
+    "Mode of operation, MODE is one of: generate-aterms, antiunify-aterms, antiunify-group, graphviz, similarity, unparse, weave"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -101,6 +110,7 @@ parseMode "generate-aterms"  = Just GenerateATerms
 parseMode "antiunify-aterms" = Just AntiUnifyATerms
 parseMode "antiunify-group"  = Just AntiUnifyGroup
 parseMode "graphviz"         = Just Graphviz
+parseMode "similarity"       = Just Similarity
 parseMode "unparse"          = Just Unparse
 parseMode "weave"            = Just Weave
 parseMode _                  = Nothing
@@ -111,9 +121,9 @@ parseMode _                  = Nothing
 -- Ignore permissons on files:
 -- drivers/char/mmtimer.c /tmp/IV5Cnd_mmtimer.c 58eddfdd3110a3a7168f2b8bdbfabefb9691016a 100644 /tmp/9W7Cnd_mmtimer.c 12006182f575a4f3cd09827bcaaea6523077e7b3 100644
 data GitDiffArgs = GitDiffArgs
-  { gdaFilePath       :: LT.Text
-  , gdaBeforeCommit   :: LT.Text
-  , gdaAfterCommit    :: LT.Text
+  { gdaFilePath       :: T.Text
+  , gdaBeforeCommit   :: T.Text
+  , gdaAfterCommit    :: T.Text
   }
   deriving (Show, Read, Eq, Ord)
 
@@ -133,6 +143,7 @@ main = do
       AntiUnifyATerms -> processTerms  (optSandbox opts)
       AntiUnifyGroup  -> antiUnifyTerms (optSandbox opts) (map read rest)
       Graphviz        -> generateGraphs (optSandbox opts)
+      Similarity      -> similarTrees (optSandbox opts)
       Unparse         -> unparseTerms (optSandbox opts)
       Weave           -> weaveTerms (optSandbox opts)
 -----------------------------------------------------------------------
@@ -149,7 +160,7 @@ generateTerms :: FilePath -> Sh ()
 generateTerms sandbox = do
   -- We add "master" so that if the repo is currently at a weird revision or branch, we get
   -- reasonable view of the history of master.
-  cs <- LT.lines <$> run "git" ["log", "master", "--pretty=format:%H", "--reverse"]
+  cs <- T.lines <$> run "git" ["log", "master", "--pretty=format:%H", "--reverse"]
   -- TODO: use the full history
   let pairs = {- take 10 -} (zip cs (drop 1 cs))
   -- Log the version pairs for later processing
@@ -157,24 +168,24 @@ generateTerms sandbox = do
   let initArchive    = versionPairs `addEntryToArchive` emptyArchive
       versionPairsFP = "version-pairs.hs" :: String
       versionPairs   = toEntry versionPairsFP 0 (BL.pack (show pairs))
-      archiveFP      = LT.unpack (toTextIgnore (sandbox </> "version-patterns.zip"))
+      archiveFP      = T.unpack (toTextIgnore (sandbox </> "version-patterns.zip"))
   writeFileInChunks archiveFP (fromArchive initArchive)
 
   flipFoldM_ pairs initArchive $ \archive' (first,second) -> do
     setenv "GIT_EXTERNAL_DIFF" "echo"
-    diffLines <- LT.lines <$> run "git" ["diff", first, second]
+    diffLines <- T.lines <$> run "git" ["diff", first, second]
     -- Git should always return the same information, eg., if this fails something has gone wrong
     -- TODO: what about multiple files? would that generate multiple lines?
-    let parseDiffArgs :: [LT.Text] -> GitDiffArgs
+    let parseDiffArgs :: [T.Text] -> GitDiffArgs
         parseDiffArgs [fp,_,_,_,_,_,_] = GitDiffArgs { gdaFilePath     = fp
                                                      , gdaBeforeCommit = first
                                                      , gdaAfterCommit  = second }
-        parseDiffArgs l | otherwise    = error ("unexpected output from git diff: " ++ LT.unpack (LT.concat l))
+        parseDiffArgs l | otherwise    = error ("unexpected output from git diff: " ++ T.unpack (T.concat l))
 
         diffArgs :: [GitDiffArgs]
-        diffArgs = map parseDiffArgs (map LT.words diffLines)
+        diffArgs = map parseDiffArgs (map T.words diffLines)
 
-        saveATerms :: Archive -> LT.Text -> [GitDiffArgs] -> Sh Archive
+        saveATerms :: Archive -> T.Text -> [GitDiffArgs] -> Sh Archive
         saveATerms a commit gdas = do
           -- To properly parse files we need the context that the repository was in
           -- when the commit was made. So we do a checkout. We may also need to
@@ -197,21 +208,21 @@ generateTerms sandbox = do
           -------------------------------
           flipFoldM gdas a $ \archive gda -> do
             let commitDir   = fromText commit
-                gdasFP      = LT.unpack (toTextIgnore (commitDir </> "gdas.hs"))
+                gdasFP      = T.unpack (toTextIgnore (commitDir </> "gdas.hs"))
                 gdasEntry   = toEntry gdasFP 0 (BL.pack (show gdas))
                 gdasArchive = gdasEntry `addEntryToArchive` archive
             -- parse (gdaFilePath gda) using src2trm and save the result in destDir
             -- Only handle C source for now
             if fileFilter (gdaFilePath gda)
               then do
-                liftIO (putStrLn ("running src2term for " ++ (LT.unpack (gdaFilePath gda))))
+                liftIO (putStrLn ("running src2term for " ++ (T.unpack (gdaFilePath gda))))
                 let from    = fromText (gdaFilePath gda)
                     to      = commitDir </> (replaceExtension from "trm")
                 catchany_sh
                   (do trm <- B.pack <$> writeSharedATerm <$> src2term from
-                      let trmArchive = toEntry (LT.unpack (toTextIgnore to)) 0 (BL.fromChunks [trm]) `addEntryToArchive` gdasArchive
+                      let trmArchive = toEntry (T.unpack (toTextIgnore to)) 0 (BL.fromChunks [trm]) `addEntryToArchive` gdasArchive
                       writeFileInChunks archiveFP (fromArchive trmArchive)
-                      liftIO (putStrLn ("Wrote: " ++ LT.unpack (toTextIgnore to) ++ " in archive."))
+                      liftIO (putStrLn ("Wrote: " ++ T.unpack (toTextIgnore to) ++ " in archive."))
                       liftIO (toArchive <$> (BL.readFile archiveFP)))
                   (\e -> do
                     liftIO (putStr "Error running src2term: ")
@@ -255,13 +266,13 @@ src2term from to = do
                 , "-Iconfig/unix"
                 ])
   -- read the file in so we can add it to the archive
-  bs <- liftIO (B.readFile (LT.unpack (toTextIgnore destFile)))
+  bs <- liftIO (B.readFile (T.unpack (toTextIgnore destFile)))
   rm destFile
   return bs
 -}
 src2term :: FilePath -> Sh ATermTable
 src2term from = do
-  cs <- liftIO (readFile (LT.unpack (toTextIgnore from)))
+  cs <- liftIO (readFile (T.unpack (toTextIgnore from)))
   case parser compilationUnit cs of
     Right prog -> return (toATermTable (toATerm prog))
     Left  e    -> fail (show e)
@@ -274,11 +285,11 @@ src2term from = do
 -- of the two and adds that to the zip archive.
 processTerms :: FilePath -> Sh ()
 processTerms dir = do
-  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  let archiveFP = T.unpack (toTextIgnore (dir </> "version-patterns.zip"))
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
-  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(T.Text,T.Text)]
       initArchive = toArchive initArchiveBS
   case mb_ds of
     Just ds -> do
@@ -301,16 +312,16 @@ processTerms dir = do
                 (if fileFilter (gdaFilePath gda)
                   then do
                     liftIO (putStrLn ("Antiunify using " ++ show gda))
-                    let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
+                    let diffDir             = fromText (commitBefore `T.append` ".." `T.append` commitAfter)
                         antiunifiedFilePath = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
                         antiTerms           = antiUnifySh archive gda
                     case antiTerms of
                       -- Something went wrong
                       Left e          -> liftIO (putStrLn e) >> return archive
                       Right (t,s1,s2) -> do
-                        let entry      = toEntry (LT.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
+                        let entry      = toEntry (T.unpack (toTextIgnore antiunifiedFilePath)) 0 (BL.pack (show (t,s1,s2)))
                             newArchive = entry `addEntryToArchive` archive
-                        liftIO (putStrLn ("Wrote antiunification to: " ++ (LT.unpack (toTextIgnore antiunifiedFilePath))))
+                        liftIO (putStrLn ("Wrote antiunification to: " ++ (T.unpack (toTextIgnore antiunifiedFilePath))))
                         writeFileInChunks archiveFP (fromArchive newArchive)
                         liftIO (putStrLn "Done writing archive.")
                         liftIO (toArchive <$> (BL.readFile archiveFP))
@@ -331,8 +342,8 @@ antiUnifySh archive gda = do
                              replaceExtension (fromText (gdaFilePath gda)) "trm"
       termAfterFilePath  = fromText (gdaAfterCommit gda)  </>
                              replaceExtension (fromText (gdaFilePath gda)) "trm"
-      mb_tb              = findEntryByPath (LT.unpack (toTextIgnore termBeforeFilePath)) archive
-      mb_ta              = findEntryByPath (LT.unpack (toTextIgnore termAfterFilePath))  archive
+      mb_tb              = findEntryByPath (T.unpack (toTextIgnore termBeforeFilePath)) archive
+      mb_ta              = findEntryByPath (T.unpack (toTextIgnore termAfterFilePath))  archive
   case (mb_tb, mb_ta) of
     (Just tb, Just ta) ->
       let termToTree t = atermToTree (getATerm t) t
@@ -362,23 +373,23 @@ antiUnifyTerms dir termIds = do
   liftIO (writeFile "antiunify.gv" gv)
   where
   match :: FilePath -> Sh Bool
-  match fp = return (or [("-" ++ show i ++ ".trm") `isSuffixOf` LT.unpack (toTextIgnore fp) | i <- termIds])
+  match fp = return (or [("-" ++ show i ++ ".trm") `isSuffixOf` T.unpack (toTextIgnore fp) | i <- termIds])
 
   loadTerms :: [FilePath] -> Sh [Term]
   loadTerms = mapM loadTerm
 
   loadTerm :: FilePath -> Sh Term
   loadTerm fp = do
-    t <- liftIO (readATermFile (LT.unpack (toTextIgnore fp)))
+    t <- liftIO (readATermFile (T.unpack (toTextIgnore fp)))
     return (atermToTree (getATerm t) t)
 
 generateGraphs :: FilePath -> Sh ()
 generateGraphs dir = do
-  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  let archiveFP = T.unpack (toTextIgnore (dir </> "version-patterns.zip"))
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
-  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(T.Text,T.Text)]
       initArchive = toArchive initArchiveBS
       index       = filesInArchive initArchive
   case mb_ds of
@@ -386,12 +397,12 @@ generateGraphs dir = do
     Just ds -> do
       liftIO (putStrLn "just ds")
       forM_ ds $ \(commitBefore,commitAfter) -> do
-        let diffDir = LT.unpack (commitBefore `LT.append` ".." `LT.append` commitAfter `LT.append` "/")
+        let diffDir = T.unpack (commitBefore `T.append` ".." `T.append` commitAfter `T.append` "/")
             inDir   = filter (diffDir `isPrefixOf`) index
             hs      = filter (".hs" `isSuffixOf`) inDir
         forM_ hs $ \h -> do
           liftIO (putStrLn h)
-          let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
+          let term = readFromArchive initArchive (fromText (T.pack h)) :: Maybe (Term,Subs,Subs)
           case term of
             Nothing        -> return ()
             Just (_,s1,s2) -> do
@@ -405,7 +416,7 @@ makeGraphFromSubs fp subs = do
   let ps  = M.assocs (extractMap subs)
       gs  = map (\(k,v) -> (extractName k, treeToGraphviz v)) ps
       cs  = map (\(k,v) -> (k,unlines v)) gs
-      o k = (LT.unpack (toTextIgnore fp)) ++ "-" ++ k ++ ".gv"
+      o k = (T.unpack (toTextIgnore fp)) ++ "-" ++ k ++ ".gv"
   forM_ cs (\(k,v) -> liftIO (writeFile (o k) (concat ["digraph {\n",v,"}"])))
   where extractName (Node (LBLString n) _) = n
         extractName _                      = ""
@@ -413,11 +424,11 @@ makeGraphFromSubs fp subs = do
 
 unparseTerms :: FilePath -> Sh ()
 unparseTerms dir = do
-  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  let archiveFP = T.unpack (toTextIgnore (dir </> "version-patterns.zip"))
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
-  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+  let mb_ds       = readFromArchive initArchive "version-pairs.hs" :: Maybe [(T.Text,T.Text)]
       initArchive = toArchive initArchiveBS
       index       = filesInArchive initArchive
   case mb_ds of
@@ -425,12 +436,12 @@ unparseTerms dir = do
     Just ds -> do
       liftIO (putStrLn "just ds")
       forM_ ds $ \(commitBefore,commitAfter) -> do
-        let diffDir = LT.unpack (commitBefore `LT.append` ".." `LT.append` commitAfter `LT.append` "/")
+        let diffDir = T.unpack (commitBefore `T.append` ".." `T.append` commitAfter `T.append` "/")
             inDir   = filter (diffDir `isPrefixOf`) index
             hs      = filter (".hs" `isSuffixOf`) inDir
         forM_ hs $ \h -> do
           liftIO (putStrLn h)
-          let term = readFromArchive initArchive (fromText (LT.pack h)) :: Maybe (Term,Subs,Subs)
+          let term = readFromArchive initArchive (fromText (T.pack h)) :: Maybe (Term,Subs,Subs)
           case term of
             Nothing        -> return ()
             Just (_,s1,s2) -> do
@@ -451,11 +462,11 @@ term2src subs = do
 
 weaveTerms :: FilePath -> Sh ()
 weaveTerms dir = do
-  let archiveFP = LT.unpack (toTextIgnore (dir </> "version-patterns.zip"))
+  let archiveFP = T.unpack (toTextIgnore (dir </> "version-patterns.zip"))
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
   -- find version-pairs.hs in the archive
-  let mb_ds   = readFromArchive archive "version-pairs.hs" :: Maybe [(LT.Text,LT.Text)]
+  let mb_ds   = readFromArchive archive "version-pairs.hs" :: Maybe [(T.Text,T.Text)]
       archive = toArchive initArchiveBS
   case mb_ds of
     Just ds -> do
@@ -478,7 +489,7 @@ weaveTerms dir = do
                 (if fileFilter (gdaFilePath gda)
                   then do
                     liftIO (putStrLn ("weave using " ++ show gda))
-                    let diffDir             = fromText (commitBefore `LT.append` ".." `LT.append` commitAfter)
+                    let diffDir             = fromText (commitBefore `T.append` ".." `T.append` commitAfter)
                         weaveFilePath       = diffDir </> (replaceExtension (fromText (gdaFilePath gda)) "hs")
                         woven               = weaveSh archive gda
                     case woven of
@@ -488,12 +499,12 @@ weaveTerms dir = do
                          let destPath  = "weaves" </> directory weaveFilePath
                              outfp     = destPath </> (filename (replaceExtension weaveFilePath "gv"))
                              outgvfps  = [directory outfp </>
-                                           (fromText (toTextIgnore (basename outfp) `LT.append`
-                                           "-" `LT.append` LT.pack (show x))) <.> "gv"
+                                           (fromText (toTextIgnore (basename outfp) `T.append`
+                                           "-" `T.append` T.pack (show x))) <.> "gv"
                                          | x <- [(prevCount::Int)..]]
                              outtrmfps = [directory outfp </>
-                                           (fromText (toTextIgnore (basename outfp) `LT.append`
-                                           "-" `LT.append` LT.pack (show x))) <.> "trm"
+                                           (fromText (toTextIgnore (basename outfp) `T.append`
+                                           "-" `T.append` T.pack (show x))) <.> "trm"
                                          | x <- [(prevCount::Int)..]]
                              mkGV l    = concat ["digraph {\n", unlines l,"}"]
                              gvs       = map (mkGV . eTreeToGraphviz) ws'
@@ -504,12 +515,12 @@ weaveTerms dir = do
                                          in zip ws (map (size . toSizedTree) ws)
                          if length ps' /= length ts' then error "ps' /= ts'" else return ()
                          mkdir_p destPath
-                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outgvfps) gvs)
+                         liftIO (forM_ (zip (map (T.unpack . toTextIgnore) outgvfps) gvs)
                                        (\(fp,gv) -> do
                                          putStrLn ("Writing: " ++ fp)
                                          writeFile fp gv
                                          putStrLn ("Wrote graphviz of weave to: " ++ fp)))
-                         liftIO (forM_ (zip (map (LT.unpack . toTextIgnore) outtrmfps) terms)
+                         liftIO (forM_ (zip (map (T.unpack . toTextIgnore) outtrmfps) terms)
                                        (\(fp,term) -> do
                                          putStrLn ("Writing: " ++ fp)
                                          writeFile fp (writeSharedATerm term)
@@ -537,8 +548,8 @@ weaveSh :: IsString a => Archive -> GitDiffArgs -> Either a (WeaveTree Bool)
 weaveSh archive gda = do
   let termBeforeFilePath = fromText (gdaBeforeCommit gda) </> replaceExtension (fromText (gdaFilePath gda)) "trm"
       termAfterFilePath  = fromText (gdaAfterCommit gda)  </> replaceExtension (fromText (gdaFilePath gda)) "trm"
-      mb_tb              = findEntryByPath (LT.unpack (toTextIgnore termBeforeFilePath)) archive
-      mb_ta              = findEntryByPath (LT.unpack (toTextIgnore termAfterFilePath))  archive
+      mb_tb              = findEntryByPath (T.unpack (toTextIgnore termBeforeFilePath)) archive
+      mb_ta              = findEntryByPath (T.unpack (toTextIgnore termAfterFilePath))  archive
   case (mb_tb, mb_ta) of
     (Just tb, Just ta) ->
       let termToTree t = atermToTree (getATerm t) t
@@ -549,6 +560,27 @@ weaveSh archive gda = do
       in Right w
     _ -> Left "Failed to load terms"
 
+
+similarTrees :: FilePath -> Sh ()
+similarTrees dir = do
+  let fp = T.unpack (toTextIgnore (dir </> "treesimilarity.csv"))
+  cs <- liftIO (readFile fp)
+  let csvDat = case parseCSV fp (dropTrailingNewline cs) of
+               Right c -> (map read) <$> c :: [[Double]]
+               Left  e -> error (show e)
+      d      = V.fromList (concat csvDat)
+      d2     = (>= 0.6) <$> d
+      sz     = length csvDat
+  d3 <- liftIO (modexp d2 sz sz)
+  liftIO (print d3)
+
+  where
+  -- horribly inefficient, but for some reason the csv parser
+  -- treats the final newline in a file as a record. So,
+  -- we strip it out.
+  dropTrailingNewline [] = []
+  dropTrailingNewline xs | last xs == '\n' = init xs
+                         | otherwise       = xs
 -----------------------------------------------------------------------
 
 
@@ -697,7 +729,7 @@ cleanlabel lbl = filter (\c -> c /= '\\' && c /= '\'' && c /= '\"') lbl
 -- | Lazily pulls a Readable value out of the requested file in the archive.
 readFromArchive :: Read a => Archive -> FilePath -> Maybe a
 readFromArchive archive fp =
-  (read . BL.unpack . fromEntry) <$> findEntryByPath (LT.unpack (toTextIgnore fp)) archive
+  (read . BL.unpack . fromEntry) <$> findEntryByPath (T.unpack (toTextIgnore fp)) archive
 
 -- | Like the normal withFile except that internally it uses
 -- 'shelly' and 'liftIO' to make the type Sh instead of IO.
@@ -714,13 +746,13 @@ writeFileInChunks fp bl = do
   withFileSh (fp++".tmp") WriteMode $ \h -> do
     forM_ (BL.toChunks bl) $ \b -> do
       liftIO (B.hPut h b)
-  mv (fromText (LT.pack (fp++".tmp")))
-     (fromText (LT.pack fp))
+  mv (fromText (T.pack (fp++".tmp")))
+     (fromText (T.pack fp))
 
 -- | We're mostly interested in C at the moment, so that means
 -- .c and .h files.
-fileFilter :: LT.Text -> Bool
-fileFilter fp = (".java" `LT.isSuffixOf` fp)
+fileFilter :: T.Text -> Bool
+fileFilter fp = (".java" `T.isSuffixOf` fp)
 
 flipFoldM_ :: Monad m => [b] -> a -> (a -> b -> m a) -> m ()
 flipFoldM_ xs a f = foldM_ f a xs
@@ -754,4 +786,24 @@ chunk n xs = take n xs : chunk n (drop n xs)
 fromEnum' :: Enum a => Maybe a -> Int
 fromEnum' (Just a) = fromEnum a
 fromEnum' Nothing  = -1
+
+-- Haskell doesn't know C99's bool type, so we use CChar
+foreign import ccall "modexp" c_modexp :: Ptr CChar -> Ptr CChar -> Ptr CChar -> CInt -> CInt -> IO ()
+
+modexp :: Vector Bool -> Int -> Int -> IO (Vector Bool)
+modexp x sz y = do
+  let len = V.length x
+      x'  = toChar <$> x
+  a <- mallocForeignPtrBytes len
+  c <- mallocForeignPtrBytes len
+  withForeignPtr a $ \ptrX -> do
+      pokeArray ptrX (V.toList x')
+      withForeignPtr c $ \ptrC -> do
+        c_modexp ptrX ptrX ptrC (fromIntegral sz) (fromIntegral y)
+        V.map toBool <$> V.fromList <$> peekArray len ptrC
+  where
+  toBool :: CChar -> Bool
+  toBool = toEnum . fromEnum
+  toChar :: Bool -> CChar
+  toChar = toEnum . fromEnum
 -----------------------------------------------------------------------
