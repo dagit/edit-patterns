@@ -61,6 +61,7 @@ data Options = Options
   , optSandbox   :: FilePath
   , optMode      :: Mode
   , optThreshold :: Double
+  , optNumChanges:: Int 
   }
 
 data Mode
@@ -75,10 +76,11 @@ data Mode
 
 defaultOptions :: Options
 defaultOptions = Options
-  { optVerbose   = False
-  , optSandbox   = "/tmp/dagit/version-patterns"
-  , optMode      = GenerateATerms
-  , optThreshold = 0
+  { optVerbose    = False
+  , optSandbox    = "/tmp/dagit/version-patterns"
+  , optMode       = GenerateATerms
+  , optThreshold  = 0
+  , optNumChanges = 100
   }
 
 options :: [ OptDescr (Options -> IO Options) ]
@@ -106,6 +108,13 @@ options =
         threshold `seq` return o { optThreshold = threshold })
       "THRESHOLD")
     "Threshold for similarity, as a floating point value, in the range [0..1]"
+  , Option "n" ["num"]
+    (ReqArg
+      (\arg o -> do
+        let num = read arg :: Int
+        num `seq` return o { optNumChanges = num })
+      "NUM")
+    "The number of changes to consume"
   , Option "h" ["help"]
     (NoArg
       (\_ -> do
@@ -155,7 +164,7 @@ main = do
       Graphviz        -> generateGraphs (optSandbox opts)
       Similarity      -> similarTrees (optSandbox opts) (optThreshold opts)
       Unparse         -> unparseTerms (optSandbox opts)
-      Weave           -> weaveTerms (optSandbox opts)
+      Weave           -> weaveTerms (optSandbox opts) (optNumChanges opts)
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
@@ -464,8 +473,8 @@ term2src subs = do
         extractName _                      = ""
         extractMap (Subs t) = t
 
-weaveTerms :: FilePath -> Sh ()
-weaveTerms dir = do
+weaveTerms :: FilePath -> Int -> Sh ()
+weaveTerms dir num = do
   let archiveFP = T.unpack (toTextIgnore (dir </> "version-patterns.zip"))
   initArchiveBS <- liftIO (BL.readFile archiveFP)
 
@@ -476,8 +485,7 @@ weaveTerms dir = do
     Just ds -> do
       liftIO (putStrLn ("length ds = " ++ show (length ds)))
       -- process each diff pair
-      -- TODO: make this 100 a parameter
-      (_,ps,ts) <- flipFoldM (take 100 ds) (0,[],[]) $ \(count,ps,ts) (commitBefore,commitAfter) -> do
+      (_,ps,ts) <- flipFoldM (take num ds) (0,[],[]) $ \(count,ps,ts) (commitBefore,commitAfter) -> do
         liftIO (putStrLn ("processing " ++ show (commitBefore,commitAfter)))
         let commitDir = fromText commitBefore
         liftIO (putStrLn ("Looking in " ++ show commitDir))
