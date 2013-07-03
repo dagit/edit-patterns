@@ -24,4 +24,43 @@ itself.  We show the number of clusters (broken down by type: code addition,
 code deletion, or code mutation) as a function of threshold in
 Figure~\ref{fig:thresholdplot}.
 
-As we can see, as the threshold increases, we see more groupings of changes due to changes that were considered similar under a lower threshold being considered dissimilar under the more restrictive threshold.
+As we can see, as the threshold increases, we see more groupings of changes
+due to changes that were considered similar under a lower threshold being
+considered dissimilar under the more restrictive threshold.  For example, at
+$t=0.15$, a single pattern for for-loops is identified:
+
+\begin{verbatim}
+for ([]=[];[]<[];[]) {
+    []
+}
+\end{verbatim}
+
+As the threshold is increased to $t=0.25$, in addition to generic for-loops, a
+cohort of changes are identified to a more specific instance of the for-loop where
+the loop counter is initialized to zero:
+
+\begin{verbatim}
+for ([]=0;[]<[];[]) {
+    []
+}
+\end{verbatim}
+
+Increasing to $t=0.35$, the pattern for the conditional becomes more specific
+and we see what appears to be a template for using the field of an object
+(e.g., {\tt args.length}) as the loop termination criterion:
+
+\begin{verbatim}
+for ([]=0;[]<[].[];[]) {
+    []
+}
+\end{verbatim}
+
+Similar templates emerge for code patterns such as method invocations, printing
+the concatenation of two strings, and other common activities.  
+
+\subsection{Group sizes}
+
+\subsection{Example trees}
+
+\subsection{Interpretation of results}
+
