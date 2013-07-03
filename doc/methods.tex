@@ -169,6 +169,15 @@ produce a boolean matrix $D'$ where $D'_{ij} = d(t_i, t_j) > \tau$.  An
 example matrix is shown in Figure~\ref{fig:boolmat} for changes observed
 in the VCS for ANTLR where $\tau = 0.9$.  
 
+\begin{figure}
+\begin{center}
+\includegraphics[width=0.45\textwidth]{figures/distmatrix-0-9.png}
+\label{fig:boolmat}
+\caption{Boolean matrix for the ANTLR repository indicating all pairs of
+changes that have similarity greater than or equal to $\tau = 0.9$.}
+\end{center}
+\end{figure}
+
 Given such a matrix, we would like to use information from the Yang
 differencing algorithm to distinguish what kind of change each subtree
 represents.  Three possibilities exist: a code insertion (a ``left-hole''),
