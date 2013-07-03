@@ -6,10 +6,10 @@ data.  First, each version of all source files in the project are
 reconstituted from the differences stored within the VCS such that each
 version of a file can be parsed by an appropriate language front end.  Each
 front-end is configured to map the parsed code to an annotated term (or,
-aterm)~\cite{brand00aterm} that represents a standardized serialization of the parse
-tree or abstract syntax tree.  Mapping languages to a common aterm format allows
-the downstream portions of our workflow to be language-agnostic to a large degree,
-with minimal language-specific parameterization.  
+aterm)~\cite{brand00aterm} that represents a standardized serialization of the
+parse tree or abstract syntax tree.  Mapping languages to a common aterm
+format allows the downstream portions of our workflow to be language-agnostic
+to a large degree, with minimal language-specific parameterization.
 
 Once we have code in an aterm format, we can then apply a structural
 differencing algorithm between adjacent versions of each source file (e.g.,
@@ -17,29 +17,30 @@ version $n$ of file $f$ is compared to version $n+1$ of file $f$).  The result
 of this is a forest of trees that represent the portions of the AST of file
 $f$ that changed between versions at the structural level.  These changes can
 either be code insertions, deletions, or mutations.  Our differencing is based
-on the work of Yang~\cite{yang91diff} whose algorithm was designed for computing
-differences between source code versions.  Yang's goal was to improve the
-visual presentation of differences in textual diff tools, and our use of their
-algorithm to provide input to further tree analysis algorithms is novel.
+on the work of Yang~\cite{yang91diff} whose algorithm was designed for
+computing differences between source code versions.  Yang's goal was to
+improve the visual presentation of differences in textual diff tools, and our
+use of their algorithm to provide input to further tree analysis algorithms is
+novel.
 
 After reducing the sequence of differences stored in the VCS, we have a large
 forest of trees each representing a change that occurred over the evolution of
-the software.  At this point, we seek to relate each of these trees via a 
-tree similarity metric.  This is achieved by using Yang's algorithm a second time,
-but in this case we ignore the sequence of edit operations that it produces and
-simply consume the quantitative similarity metric that it produces as a rough
-estimate of how closely related two trees are.  (TODO: where to discuss the fact that
-this is not a commutative operator).  A threshold parameter is defined in which
-two trees with a similarity above the threshold are considered to be part of the same
-group of difference tress.
+the software.  At this point, we seek to relate each of these trees via a
+tree similarity metric.  This is achieved by using Yang's algorithm a second
+time, but in this case we ignore the sequence of edit operations that it
+produces and simply consume the quantitative similarity metric that it
+produces as a rough estimate of how closely related two trees are.  A
+threshold parameter is defined in which two trees with a similarity above the
+threshold are considered to be part of the same group of difference tress.
 
-Finally, once the set of differences are grouped into groups of trees that
-are similar up to the threshold, we perform antiunification on the entire
-group to distill all members to a representative code pattern for the
-group.  The antiunification algorithm as described by
-Bulychev~\cite{bulychev08dupe} as part of the clonedigger project
-was used, which itself is an implementation of the classical antiunitification
-algorithm of Reynolds~\cite{reynolds69antiunification}.
+Finally, once the set of differences are grouped into groups of trees that are
+similar up to the threshold, we perform antiunification on the entire group to
+distill all members to a representative code pattern for the group.  The
+antiunification algorithm as described by Bulychev~\cite{bulychev08dupe} as
+part of the clonedigger
+project\footnote{\url{http://clonedigger.sourceforge.net}} was used, which
+itself is an implementation of the classical antiunitification algorithm of
+Reynolds~\cite{reynolds69antiunification}.
 
 In the following sections, we descibe the steps above in greater detail.
 
@@ -96,19 +97,34 @@ representation in our prototype.
 
 \subsection{Structural differencing}
 
-Related work on structural change detection~\cite{chawathe96change}.  Tree
-diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very
-related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
-need to quickly re-scan these to see the overlap.
+One of the classical algorithms studied in computer science is that of string
+similarity and the concept of string edit distance as a measure of the minimal
+number of operations necessary to mutate one string or sequence into another.
+A more complex problem is to define a similar sequence of operations to change
+a non-linear structure like a tree from one into another.  This problem of
+computing a structural edit distance has been studied since the  1970s and has
+yielded tree differencing algorithms analogous to string differencing
+algorithms commonly used in text analysis.  Many modern efforts in this area
+are based on the initial work of Selkow~\cite{selkow77tree} and
+Tai~\cite{tai79tree}.  Interest in such analysis of tree-structured data
+increased with the proliferation of structured document format used on the
+internet such as XML, HTML and SGML~\cite{chawathe96change}.
+
+Our work based on Yang's source differencing technique~\cite{yang91diff}.
+In this algorithm two trees to be compared are mapped to two trees in which
+nodes are annotated with edit operations (Keep or Delete), which can be applied
+to turn each tree into the other.  These edit trees are then post-processed
+after Yang's algorithm is applied to generate what we call a weave tree.
 
 \subsection{Weaving structural differences}
 
 The next step of our processing takes the edit trees from the the tree diff
 algorithm and overlays them to create a weave tree. The purpose of the weave
-tree is two fold. First, it gives us a way to separate the kinds of changes
-where they happen. Secondly, it allows us to visualize the two trees overlayed
-on each other. The kinds of edits that we separate into are modifications,
-adding nodes, and removing nodes.
+tree is two fold. First, it gives us a way to identify the kinds of changes
+where they happen instead of having them implicitly represented as a sequence
+of isolated operations. Secondly, it allows us to visualize the two trees
+overlayed on each other. The kinds of edits that we separate into are
+modifications, adding nodes, and removing nodes.
 
 To separate the modifications into the different kinds, we consider the type of
 mismatch between the input trees. We refer to the tree before the change as the
@@ -151,7 +167,7 @@ compute the $n^2$ distances between all pairs to generate a distance matrix
 $D$ where $D_{ij} = d(t_i, t_j)$.  Given a threshold value $\tau$, we can
 produce a boolean matrix $D'$ where $D'_{ij} = d(t_i, t_j) > \tau$.  An
 example matrix is shown in Figure~\ref{fig:boolmat} for changes observed
-in the VCS for PROJECT X where $\tau = 0.9$.  
+in the VCS for ANTLR where $\tau = 0.9$.  
 
 Given such a matrix, we would like to use information from the Yang
 differencing algorithm to distinguish what kind of change each subtree
@@ -170,16 +186,17 @@ insertion operation (such as changing a variable name in an expression).
 
 \subsection{Anti-unification and template generation}
 
-Once we have groups of related code snippets in the form of related
-subtrees, we can seek patterns that relate changes.  For example, say we have
-a function call $foo()$ where each invocation of the function uses the same
-parameters (e.g, $foo(x,y)$, where $x$ and $y$ are always the same). If we add
-a new parameter at the end of each call where the variable passed in differs
-each time (e.g., $foo(x,y,a)$ and $foo(x,y,b)$), we would like to abstract out
-this change as $foo(x,y,VAR)$, where each instance of the change replaces
-$VAR$ with whatever concrete variable is used at that point.  The anti-unification
-algorithm is built for this purpose -- given two trees, it seeks the least-general
-generalization of the pair and produces a triplet representing the generalized tree with
-a metavariable introduced where the two differ, as well as a substitution set that allows
-the metavariable to be replaced with the appropriate concrete subtree necessary to
-reconstitute the two trees that were antiunified.
+Once we have groups of related code snippets in the form of related subtrees,
+we can seek patterns that relate changes.  For example, say we have a function
+call $foo()$ where each invocation of the function uses the same parameters
+(e.g, $foo(x,y)$, where $x$ and $y$ are always the same). If we add a new
+parameter at the end of each call where the variable passed in differs each
+time (e.g., $foo(x,y,a)$ and $foo(x,y,b)$), we would like to abstract out this
+change as $foo(x,y,VAR)$, where each instance of the change replaces $VAR$
+with whatever concrete variable is used at that point.  The anti-unification
+algorithm is built for this purpose -- given two trees, it seeks the least-
+general generalization of the pair and produces a triplet representing the
+generalized tree with a metavariable introduced where the two differ, as well
+as a substitution set that allows the metavariable to be replaced with the
+appropriate concrete subtree necessary to reconstitute the two trees that were
+antiunified.

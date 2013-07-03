@@ -23,31 +23,34 @@ are not familiar with the source code and we would like to understand at a
 structural level what types of changes were needed to add support for the new
 semaphores.
 
-Furthermore, 
-
-\claim{Finding edit patterns in source code is a hard problem.}
-
-%% 2. State our contributions
-
 Our contributions described in this work are:
 
 \begin{itemize}
 
-\item We show that structural differencing algorithms that operate on the abstract
-syntax tree or parse tree of a language can be used to map text differences stored in
-a VCS to a form where syntactic changes can be reasoned about.
+\item We show that structural differencing algorithms that operate on the
+abstract syntax tree or parse tree of a language can be used to map text
+differences stored in a VCS to a form where syntactic changes can be reasoned
+about.
 
 \item We show that the anti-unification algorithm of BLAH can be used to map
 similar changes to a generalized change pattern.
 
-\item We show that clustering by a tree similarity metric allows differences to be grouped
-such that the families of changes to generalize via anti-unification can be inferred from
-the differences using a basic similarlity threshold.
+\item We show that clustering by a tree similarity metric allows differences
+to be grouped such that the families of changes to generalize via anti-
+unification can be inferred from the differences using a basic similarlity
+threshold.
 
 \end{itemize}
 
-In this paper, we briefly describe the building blocks of our work and show preliminary results
-of this methodology as applied to version control repositories for open source projects available
-online.  The projects studied in this paper are X, Y, and Z.  In lieu of a stand-alone discussion of
-related work, we will present the work that we have based our research on inline with the associated
-topics.
+In this paper, we briefly describe the building blocks of our work and show
+preliminary results of this methodology as applied to version control
+repositories for open source projects available online.  The projects studied
+in this paper are ANTLR and Clojure, both written in Java.
+
+\subsection{Related work}
+
+The use of version control repositories as a source of data to track changes
+over time is not new, but our approach to the problem is novel. 
+These may be very
+related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
+need to quickly re-scan these to see the overlap.  
