@@ -47,6 +47,7 @@ import WeaveUtils
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as M
+import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
 
@@ -369,13 +370,6 @@ antiUnifyTerms dir fname termIds = do
   -- findWhen :: (FilePath -> Sh Bool) -> FilePath -> Sh [FilePath]
   fs <- findWhen match (dir </> fromString "weaves")
   ts <- loadTerms fs
-  -- foldl' antiunify' :: Term -> [Term] -> Term
-  -- let t = foldl1' antiunify' ts
-  -- TODO: to be useful this bit of code needs to rename variables as it
-  -- folds and unions. Use the other version (antiunify') if you are just
-  -- going to ignore the substiutions anyway
-  -- let t = foldl1' antiunify'' (zip3 ts (repeat e) (repeat e))
-  --     e = Subs M.empty
   if length ts < 1 then error "not enough terms to antiunify" else return ()
   let (t,_)  = fromJust (antiunifyList ts)
       gv     = (concat ["digraph {\n",unlines (treeToGraphviz t),"}"])
@@ -544,16 +538,35 @@ weaveTerms dir = do
                   liftIO (putStrLn (show e))
                   return (prevCount,prevPs,prevTs))
           Nothing -> return (0,[],[])
-      let dists :: [(LabeledTree,Int)] -> [Double]
-          dists xs   = [ fromIntegral (treedist t1 t2 (==))/fromIntegral(max s1 s2)
-                        -- fromIntegral (treedist t1 t2 (==))/fromIntegral s1
-                       | (t1,s1) <- xs, (t2,s2) <- xs ]
-          csvShow xs = unlines (map csvShow' xs)
+      if length ps /= length ts then error "ps /= ts" else return ()
+      let dists :: MismatchType -> [((LabeledTree,Int),Maybe MismatchType)] -> [Double]
+          dists ty xs = [ let -- score = fromIntegral (treedist t1 t2 (==))/fromIntegral(max s1 s2)
+                              -- score = fromIntegral (treedist t1 t2 (==))/fromIntegral s1
+                              scorel = fromIntegral (treedist t1 t2 (==))
+                              scorer = fromIntegral (treedist t2 t1 (==))
+                              -- score  = min (scorel / fromIntegral s1)
+                              --              (scorer / fromIntegral s2)
+                              score = min scorel scorer / fromIntegral (max s1 s2)
+                          in if ty1 == ty2 && ty1 == Just ty
+                               then score
+                               else 0
+                       | ((t1,s1),ty1) <- xs, ((t2,s2),ty2) <- xs ]
+          csvShow xs  = unlines (map csvShow' xs)
             where
             csvShow' ys = intercalate "," (map show ys)
-      if length ps /= length ts then error "ps /= ts" else return ()
+          pairs     = zip ps ts
+          chunkSize = length pairs
+          forestBefore = dists MismatchTypeLeft  pairs
+          forestAfter  = dists MismatchTypeRight pairs
+          forestDelete = dists RightHoleType     pairs
+          forestAdd    = dists LeftHoleType      pairs
+
       liftIO (writeFile "treetypes.csv"      (intercalate "," (map (show.fromEnum') ts)))
-      liftIO (writeFile "treesimilarity.csv" (csvShow (chunk (length ps) (dists ps))))
+      liftIO (writeFile "treesimilarity-before.csv" (csvShow (chunk chunkSize forestBefore)))
+      liftIO (writeFile "treesimilarity-after.csv"  (csvShow (chunk chunkSize forestAfter)))
+      liftIO (writeFile "treesimilarity-delete.csv" (csvShow (chunk chunkSize forestDelete)))
+      liftIO (writeFile "treesimilarity-add.csv"    (csvShow (chunk chunkSize forestAdd)))
+      -- liftIO (writeFile "treesimilarity-all.csv"    (csvShow (chunk (length ps) (dists ps))))
     Nothing -> return ()
 
 weaveSh :: IsString a => Archive -> GitDiffArgs -> Either a (WeaveTree Bool)
@@ -575,46 +588,55 @@ weaveSh archive gda = do
 
 similarTrees :: FilePath -> Double -> Sh ()
 similarTrees dir thres = do
-  let fp = T.unpack (toTextIgnore (dir </> "treesimilarity.csv"))
-  cs <- liftIO (readFile fp)
-  let csvDat = case parseCSV fp (dropTrailingNewline cs) of
-               Right c -> map read <$> c :: [[Double]]
-               Left  e -> error (show e)
-      d      = V.fromList (concat csvDat)
-      d2     = (>= thres) <$> d
-      sz     = length csvDat
+  let fps  = map (\nm -> T.unpack (toTextIgnore (dir </> fromString ("treesimilarity-" ++ nm ++ ".csv")))) alts
+      alts = ["before","after","delete","add"]
   -- d3 <- liftIO (modexp d2 sz sz)
-  let similarityMatrix = chunk sz (V.toList d2)
-      filterSimilar :: M.Map Int [Int] -> M.Map Int [Int]
-      filterSimilar m = M.fromList $ do
-        (i,rs) <- M.toAscList m
-        -- For some row i, we remove it if it appears in some
-        -- row j, with j > i
-        guard (and (map (\j -> i `notElem` (m M.! j))
-                        (filter (>i) (M.keys m))))
-        return (i,rs)
 
-      similar :: M.Map Int [Int]
-      similar = filterSimilar $ M.fromList $ do
-        (i,r) <- zip [0..] similarityMatrix
-        let js = [ j | j <- elemIndices True r
-                     , i /= j ]
-        guard (not (null js))
-        return (i,js)
-
-  -- liftIO (print similar)
   liftIO (putStrLn ("Similarity threshold: " ++ show thres))
-  forM_ (M.toAscList similar) $ \(k,is) -> do
-    let set = k:sort is
-    antiUnifyTerms dir ("antiunify-" ++ show k ++ ".gv") set
+
+  similars <- zip alts <$> mapM load fps
+  mapM_ dumpGV similars
 
   where
+  dumpGV (prefix,m) = forM_ (M.toAscList m) $ \(k,is) -> do
+    let set = S.toAscList is
+    antiUnifyTerms dir ("antiunify-" ++ prefix ++ show k ++ ".gv") set
   -- horribly inefficient, but for some reason the csv parser
   -- treats the final newline in a file as a record. So,
   -- we strip it out.
   dropTrailingNewline [] = []
   dropTrailingNewline xs | last xs == '\n' = init xs
                          | otherwise       = xs
+
+  load fp = do
+    cs <- liftIO (readFile fp)
+    let csvDat = case parseCSV fp (dropTrailingNewline cs) of
+                 Right c -> map read <$> c :: [[Double]]
+                 Left  e -> error (show e)
+        d      = V.fromList (concat csvDat)
+        d2     = (>= thres) <$> d
+        sz     = length csvDat
+    return (similarityMatrix d2 sz)
+
+  similarityMatrix m sz = similar
+    where
+    sm = chunk sz (V.toList m)
+    filterSimilar :: M.Map Int (S.Set Int) -> M.Map Int (S.Set Int)
+    filterSimilar m = M.fromList $ case mapAccumL go S.empty (M.toList m) of
+                                   (_, ys) -> catMaybes ys
+      where
+      go :: S.Set Int -> (Int, S.Set Int) -> (S.Set Int, Maybe (Int,S.Set Int))
+      go seen (i,rs) = (seen', irs)
+        where
+        seen' = S.singleton i `S.union` seen `S.union` rs
+        irs   = if i `S.notMember` seen then Just (i,rs) else Nothing
+
+    similar :: M.Map Int (S.Set Int)
+    similar = filterSimilar $ M.fromList $ do
+      (i,r) <- zip [0..] sm
+      let js = elemIndices True r
+      guard (not (null js))
+      return (i,S.fromList js)
 -----------------------------------------------------------------------
 
 
