@@ -54,9 +54,42 @@ achieved via language-specific parsers.  In this work, we used the
 language-java parser available as open source libraries accessible via the
 Haskell programming language.
 
-* Example ATerm
-* Example Java AST
-* Mapping between them
+The structure of ATerms is given by this simple syntax:
+\begin{grammar}
+<aterm> ::= `AAppl' <string> <aterm-list>
+\alt `AList' <aterm-list>
+\alt `AInt' <int>
+<aterm-list> ::= $\epsilon$ | <aterm> <aterm-list>
+\end{grammar}
+
+This structure is sufficient for us to encode typical abstract syntax trees if
+we allows ourselves to use the string label of the `AAppl' portion of the
+ATerm. This is most easily illustrated with an exmaple.  Suppose that we have
+the Java AST for the statement {\tt i++; }.  In a textual form, this portion of
+the AST would be represented by:
+
+\begin{verbatim}
+ExpStmt
+  (PostIncrement
+    (ExpName
+      (Name [Ident "i"])))
+\end{verbatim}
+
+The translation to ATerm would give us,
+
+\begin{verbatim}
+AAppl "ExpStmt"
+  [AAppl "PostIncrement"
+    [AAppl "ExpName"
+      [AAppl "Name"
+        [AAppl "Ident" [Appl "\"i\"" []]]]]]
+\end{verbatim}
+
+Notice that for strings, such as identifier names, we place double quotes
+around the string inside the label portion of the ATerm. The ATerm
+representation allows for nodes to be shared within the tree. While this is a
+useful optimization for saving space, we chose to go with the simpler unshared
+representation in our prototype.
 
 \subsection{Structural differencing}
 
