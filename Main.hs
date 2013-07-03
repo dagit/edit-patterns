@@ -600,7 +600,7 @@ similarTrees dir thres = do
   where
   dumpGV (prefix,m) = forM_ (M.toAscList m) $ \(k,is) -> do
     let set = S.toAscList is
-    antiUnifyTerms dir ("antiunify-" ++ prefix ++ show k ++ ".gv") set
+    antiUnifyTerms dir ("antiunify-" ++ prefix ++ "-" ++ show k ++ ".gv") set
   -- horribly inefficient, but for some reason the csv parser
   -- treats the final newline in a file as a record. So,
   -- we strip it out.
