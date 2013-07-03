@@ -62,18 +62,83 @@ the concatenation of two strings, and other common activities.
 
 \subsection{Pattern identification}
 
+Using a portion of the Clojure history, we computed the number of similar trees
+at each threshold. See figure~\ref{fig:clojure-number-of-modifications} to see
+the number of changes by time as a function of the threshold. We looked at
+thresholds from 0 to 1 with an increment size of 0.01.
+
 \begin{figure}
-\includegraphics[width=\textwidth*0.2]{figures/clojure-number-of-modifications.pdf}
+\begin{center}
+\includegraphics[width=0.44\textwidth]{figures/clojure-number-of-modifications.pdf}
+\caption{Number of additions, deletions, and modifications by threshold for the Clojure source}
+\label{fig:clojure-number-of-modifications}
+\end{center}
 \end{figure}
+
+Looking at just the number of deletions, we examined the point where the number
+of deletions goes from 4 to 5 as the threshold changes from 0.35 to 0.36.
+
+The following code, presented in a standard diff format, shows a loop and the
+lines that were removed. This example comes from a file named {\tt
+PersistentArrayMap.java }.
 
 \subsubsection{Removed code}
 \begin{verbatim}
+ public Object kvreduce(IFn f, Object init){
      for(int i=0;i < array.length;i+=2){
          init = f.invoke(init, array[i], array[i+1]);
 -           if(RT.isReduced(init))
 -                   return ((IDeref)init).deref();
          }
+     return init;
+ }
 \end{verbatim}
+
+Given the low threshold, this deletion was considered to be similar to the
+following deletions. This example comes from {\tt PersistentHashMap.java}.
+Note: Our parser ignores whitespace and gives the same AST for \verb|if (exp) { stmt; }|
+and \verb|if (exp) stmt;|. In the diff below, we have prefixed the
+lines that were considered to actually be different by our tool with ``>''
+characters.
+
+\begin{verbatim}
+     public Object kvreduce(IFn f, Object init){
+-        for(INode node : array){
+-            if(node != null){
++        for(INode node : array)
++            {
++            if(node != null)
+                 init = node.kvreduce(f,init);
+>-                   if(RT.isReduced(init))
+>-                           return ((IDeref)init).deref();
+-                   }
+-               }
++            }
+         return init;
+     }
+\end{verbatim}
+
+In both cases, our tool identified for-loops where the the same lines are
+removed. In fact, the code for both of these is very similar perhaps owing to
+Java's HashMap and ArrayMap classes being very similar in terms of interface.
+Furthermore, it did this at the statement level, eg., we did not need to
+consider the similarities of the file names or the method names.
+
+%% Doctored version
+%%\begin{verbatim}
+%% public Object kvreduce(IFn f, Object init){
+%%     for(INode node : array){
+%%         if(node != null)
+%%-        {
+%%             init = node.kvreduce(f,init);
+%%-            if(RT.isReduced(init))
+%%-                    return ((IDeref)init).deref();
+%%-        }
+%%     }
+%%     return init;
+%% }
+%%\end{verbatim}
+
 
 \subsection{Interpretation of results}
 

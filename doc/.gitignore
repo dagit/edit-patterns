@@ -1,3 +1,5 @@
 *.aux
 *.log
-*.pdf
+doceng2013.pdf
+*.bbl
+*.blg
