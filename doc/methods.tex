@@ -55,11 +55,14 @@ language-java parser available as open source libraries accessible via the
 Haskell programming language.
 
 The structure of ATerms is given by this simple syntax:
+\setlength{\grammarindent}{8em}
 \begin{grammar}
 <aterm> ::= `AAppl' <string> <aterm-list>
 \alt `AList' <aterm-list>
 \alt `AInt' <int>
-<aterm-list> ::= $\epsilon$ | <aterm> <aterm-list>
+
+<aterm-list> ::= <aterm> <aterm-list>
+\alt $\epsilon$
 \end{grammar}
 
 This structure is sufficient for us to encode typical abstract syntax trees if
@@ -99,6 +102,34 @@ related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
 need to quickly re-scan these to see the overlap.
 
 \subsection{Weaving structural differences}
+
+The next step of our processing takes the edit trees from the the tree diff
+algorithm and overlays them to create a weave tree. The purpose of the weave
+tree is two fold. First, it gives us a way to separate the kinds of changes
+where they happen. Secondly, it allows us to visualize the two trees overlayed
+on each other. The kinds of edits that we separate into are modifications,
+adding nodes, and removing nodes.
+
+To separate the modifications into the different kinds, we consider the type of
+mismatch between the input trees. We refer to the tree before the change as the
+left tree and tree after the change as the right tree. The weave tree joins
+together the parts of the tree that did not change and has special branches for
+the parts that are different. These special branches come in four varieties:
+left and right mismatches and left and right holes.
+
+Left and right mismatches represent an edit to an existing node of the AST\@.
+A left mismatch represents the change before the edit and the right mismatch
+contains the change after the edit.  Using our previous example of the Java
+statement {\tt i++; }, if we changed this to {\tt j++;}, we could get a left
+and right mismatch where the left mismatch is {\tt AAppl
+"\textbackslash"i\textbackslash"" []} and the right mismatch is {\tt AAppl
+"\textbackslash"j\textbackslash"" []}. 
+
+A left hole represents the case where the left tree (before the edit) had nodes
+that are missing in the right tree (removed by the edit). A right hole is for
+the swapped case, where the left tree is missing nodes that are present in the
+right tree. Therefore, left and right holes represent an edit that removes or
+adds code respectively.
 
 \subsection{Tree similarity metric and grouping}
 
