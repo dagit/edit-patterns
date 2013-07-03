@@ -6,3 +6,22 @@ projects, the ANTLR parser generator and the Clojure language implementation.
 Both are implemented in Java, and one (ANTLR) is composed of a mixture of
 hand-written and automatically generated code.  
 
+\subsection{Threshold sensitivity}
+
+The first experiment that we performed was to investigate the effect of
+similarity threshold to the number of groups identified, as well as the degree
+of generality present in the tree that results from all members of each group
+being anti-unified together. Our prediction was that at the lowest threshold
+(0.0), when all trees are considered to be similar, their anti-unification
+will yield the most general pattern.  This is what was observed, in which the
+anti-unification result is a tree composed of a single metavariable node.
+Similarly, at the highest threshold (1.0), the only groupings that will be
+present will be single tree sets, or sets containing identical trees for
+instances of identical changes that occurred in different places.  This is
+precicely what we observed, with the anti-unified trees containing no meta-
+variables since anti-unification of a set of identical elements is the element
+itself.  We show the number of clusters (broken down by type: code addition,
+code deletion, or code mutation) as a function of threshold in
+Figure~\ref{fig:thresholdplot}.
+
+As we can see, as the threshold increases, we see more groupings of changes due to changes that were considered similar under a lower threshold being considered dissimilar under the more restrictive threshold.
