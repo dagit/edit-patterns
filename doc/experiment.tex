@@ -60,7 +60,20 @@ the concatenation of two strings, and other common activities.
 
 \subsection{Group sizes}
 
-\subsection{Example trees}
+\subsection{Pattern identification}
+
+\begin{figure}
+\includegraphics[width=\textwidth*0.2]{figures/clojure-number-of-modifications.pdf}
+\end{figure}
+
+\subsubsection{Removed code}
+\begin{verbatim}
+     for(int i=0;i < array.length;i+=2){
+         init = f.invoke(init, array[i], array[i+1]);
+-           if(RT.isReduced(init))
+-                   return ((IDeref)init).deref();
+         }
+\end{verbatim}
 
 \subsection{Interpretation of results}
 
