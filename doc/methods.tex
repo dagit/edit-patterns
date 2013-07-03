@@ -31,12 +31,12 @@ simply consume the quantitative similarity metric that it produces as a rough
 estimate of how closely related two trees are.  (TODO: where to discuss the fact that
 this is not a commutative operator).  A threshold parameter is defined in which
 two trees with a similarity above the threshold are considered to be part of the same
-cluster of difference tress.
+group of difference tress.
 
-Finally, once the set of differences are grouped into clusters of trees that
+Finally, once the set of differences are grouped into groups of trees that
 are similar up to the threshold, we perform antiunification on the entire
-cluster to distill all members to a representative code pattern for the
-cluster.  The antiunification algorithm as described by
+group to distill all members to a representative code pattern for the
+group.  The antiunification algorithm as described by
 Bulychev~\cite{bulychev08dupe} as part of the clonedigger project
 was used, which itself is an implementation of the classical antiunitification
 algorithm of Reynolds~\cite{reynolds69antiunification}.
@@ -54,9 +54,42 @@ achieved via language-specific parsers.  In this work, we used the
 language-java parser available as open source libraries accessible via the
 Haskell programming language.
 
-* Example ATerm
-* Example Java AST
-* Mapping between them
+The structure of ATerms is given by this simple syntax:
+\begin{grammar}
+<aterm> ::= `AAppl' <string> <aterm-list>
+\alt `AList' <aterm-list>
+\alt `AInt' <int>
+<aterm-list> ::= $\epsilon$ | <aterm> <aterm-list>
+\end{grammar}
+
+This structure is sufficient for us to encode typical abstract syntax trees if
+we allows ourselves to use the string label of the `AAppl' portion of the
+ATerm. This is most easily illustrated with an exmaple.  Suppose that we have
+the Java AST for the statement {\tt i++; }.  In a textual form, this portion of
+the AST would be represented by:
+
+\begin{verbatim}
+ExpStmt
+  (PostIncrement
+    (ExpName
+      (Name [Ident "i"])))
+\end{verbatim}
+
+The translation to ATerm would give us,
+
+\begin{verbatim}
+AAppl "ExpStmt"
+  [AAppl "PostIncrement"
+    [AAppl "ExpName"
+      [AAppl "Name"
+        [AAppl "Ident" [Appl "\"i\"" []]]]]]
+\end{verbatim}
+
+Notice that for strings, such as identifier names, we place double quotes
+around the string inside the label portion of the ATerm. The ATerm
+representation allows for nodes to be shared within the tree. While this is a
+useful optimization for saving space, we chose to go with the simpler unshared
+representation in our prototype.
 
 \subsection{Structural differencing}
 
@@ -65,7 +98,9 @@ diff algorithms~\cite{tai79tree, selkow77tree}.  These may be very
 related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
 need to quickly re-scan these to see the overlap.
 
-\subsection{Tree similarity metric and clustering}
+\subsection{Weaving structural differences}
+
+\subsection{Tree similarity metric and grouping}
 
 Given two trees $t_1$ and $t_2$, we would like to define a similarity metric
 such that $d(t_1, t_2) \in [0,1]$, where a similarity of $1$ means that the
@@ -104,7 +139,7 @@ insertion operation (such as changing a variable name in an expression).
 
 \subsection{Anti-unification and template generation}
 
-Once we have clusters of related code snippets in the form of related
+Once we have groups of related code snippets in the form of related
 subtrees, we can seek patterns that relate changes.  For example, say we have
 a function call $foo()$ where each invocation of the function uses the same
 parameters (e.g, $foo(x,y)$, where $x$ and $y$ are always the same). If we add
