@@ -1,8 +1,24 @@
 \section{Conclusions}
 
-I conclude that this work kicked ass.  Whoop whoop!
+We have shown that patterns of change over the lifetime of a project can
+be obtaned through analysis of its version control history.  The use of
+tree differencing and tree similarity measures, as well as the anti-unification
+algorithm for computing generalized patterns, allows this large volume of difference data to be distilled into a compact form in which changes can be
+studied at the level of the base language syntax.  Analysis of the size and
+count of groups of similar changes as a function of a similarity threshold
+provides a disciplined way to identify generalizations of changes identified by
+the tool.
 
-\section{Acknowledgments}
+Our work has been performed using a generic, language neutral term
+representation allowing the same techniques to be applied to other languages
+given appropriate parsing infrastructure and a mapping from language-specific
+abstract syntax forms to the generic annotated term form.  Minimal
+parameterization of the tool is necessary to then consume these terms, with
+language-specific parameters largely focused on specific nodes within the term
+that correspond to semantically useful subtree roots for providing context to
+tree differences.
+
+\subsection{Acknowledgments}
 
 This work was supported in part by the US Department of
 Energy Office of Science, Advanced Scientific Computing Research
