@@ -1,19 +1,21 @@
 \section{Methodology}
 \label{sec:method}
 
-We propose the following workflow for studying software evolution via VCS data.
-First, each version of all source files in the project are reconstituted from
-the differences stored within the VCS such that each version of a file can be
-parsed by an appropriate language front end.  Each front-end is configured to
-map the parsed code to an aterm that represents a standardized serialization of
-the AST\@.  Mapping languages to a common aterm format allows the downstream
-portions of our workflow to be language-agnostic to a large degree, with
-minimal language-specific parameterization.
+We propose the tool workflow illustrated in Figure~\ref{fig:workflow} for
+studying software evolution via VCS data. First, each version of all source
+files in the project are reconstituted from the differences stored within the
+VCS such that each version of a file can be parsed by an appropriate language
+front end.  Each front-end is configured to map the parsed code to an aterm
+that represents a standardized serialization of the AST\@.  Mapping languages
+to a common aterm format allows the downstream portions of our workflow to be
+language-agnostic to a large degree, with minimal language-specific
+parameterization.
 
 \begin{figure}
 \begin{center}
 \includegraphics[height=0.44\textheight]{figures/workflow.pdf}
-\caption{The workflow of our approach\jason{This should mention weaving somewhere in the figure}}
+\caption{The components of our prototype indicating how VCS data is
+broken down into groupings of related changes for pattern generation.}
 \label{fig:workflow}
 \end{center}
 \end{figure}
@@ -234,8 +236,8 @@ of $\tau$ chosen.
 \begin{figure}
 \begin{center}
 \includegraphics[width=0.45\textwidth]{figures/distmatrix-0-9.png}
-\caption{Boolean matrix for the ANTLR repository indicating all pairs of
-changes that have similarity greater than or equal to $\tau = 0.9$.\jason{Please improve the colors.}}
+\caption{Boolean matrix $D$ for over 500 changes from the ANTLR repository indicating in white all pairs of
+changes for $\tau = 0.9$.}
 \label{fig:boolmat}
 \end{center}
 \end{figure}
