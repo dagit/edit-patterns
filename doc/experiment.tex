@@ -13,24 +13,24 @@ The first experiment that we performed was to investigate the effect of
 similarity threshold to the number of groups identified, as well as the degree
 of generality present in the tree that results from all members of each group
 being antiunified together. Our prediction was that at the lowest threshold
-(0.0), when all trees are considered to be similar, their antiunification will
+($\tau = 0.0$), when all trees are considered to be similar, their antiunification will
 yield the most general pattern.  This is what was observed, in which the
 antiunification result is a tree composed of a single metavariable node.
-Similarly, at the highest threshold (1.0), the only groupings that will be
+Similarly, at the highest threshold ($\tau = 1.0$), the only groupings that will be
 present will be single tree sets, or sets containing identical trees for
 instances of identical changes that occurred in different places.  This is
-precisely what we observed, with the antiunified trees containing no meta-
-variables since antiunification of a set of identical elements is the element
-itself.
+precisely what we observed, with the antiunified trees containing no 
+meta-variables since antiunification of a set of identical elements is the 
+element itself.
 
-\subsection{Group sizes}
+\subsection{Group counts}
 \label{sec:groups}
   
 We show the number of groups (broken down by type: addition, deletion, or
 modification) as a function of threshold of similarity ($\tau$).
-Figure~\ref{fig:clojure-number-of-modifications} shows the size of the groups
+Figure~\ref{fig:clojure-number-of-modifications} shows the number of groups
 for the Clojure history and Figure~\ref{fig:antlr-number-of-modifications}
-shows the size of the groups for the ANTLR history. In both cases, we only
+shows the number of groups for the ANTLR history. In both cases, we only
 consider a small portion of the full history of the VCS.
 
 \begin{figure}
@@ -40,7 +40,7 @@ consider a small portion of the full history of the VCS.
 \label{fig:clojure-number-of-modifications}
 \end{center}
 \end{figure}
-\jason{Why so much space between Figure~\ref{fig:clojure-number-of-modifications} and Figure~\ref{fig:antlr-number-of-modifications}?}
+
 \begin{figure}
 \begin{center}
 \includegraphics[width=0.44\textwidth]{figures/antlr-number-of-modifications.pdf}
@@ -49,16 +49,17 @@ consider a small portion of the full history of the VCS.
 \end{center}
 \end{figure}
 
-At the maximum threshold of 1, the total number of changes is less than the
+At the maximum $\tau = 1.0$, the total number of changes is less than the
 number of trees we started with, because some changes end up being identical.
-As we can see, as the threshold increases, we see more groupings of changes due
+As we can see, as $\tau$ increases, we see more groupings of changes due
 to changes that were considered similar under a lower threshold being
-considered dissimilar under the more restrictive threshold.
+considered dissimilar under the more restrictive threshold.  Increases in
+the group count represent large groups splitting into one or more smaller groups.
 
 As an example, at $\tau=0.15$, a single pattern for for-loops is identified:
 
 \begin{java}
-for ($\metavar$=$\metavar$;$\metavar$<$\metavar$;$\metavar$) {
+for ($\metavar$ = $\metavar$ ; $\metavar$ < $\metavar$ ; $\metavar$) {
     $\metavar$
 }
 \end{java}
@@ -68,7 +69,7 @@ cohort of changes are identified to a more specific instance of the for-loop whe
 the loop counter is initialized to zero:
 
 \begin{java}
-for ($\metavar$=0;$\metavar$<$\metavar$;$\metavar$) {
+for ($\metavar$ = 0 ; $\metavar$ < $\metavar$ ; $\metavar$) {
     $\metavar$
 }
 \end{java}
@@ -78,7 +79,7 @@ and we see what appears to be a template for using the field of an object
 (e.g., {\tt args.length}) as the loop termination criterion:
 
 \begin{java}
-for ($\metavar$=0;$\metavar$<$\metavar$.$\metavar$;$\metavar$) {
+for ($\metavar$ = 0 ; $\metavar$ < $\metavar$.$\metavar$ ; $\metavar$) {
     $\metavar$
 }
 \end{java}
@@ -86,25 +87,27 @@ for ($\metavar$=0;$\metavar$<$\metavar$.$\metavar$;$\metavar$) {
 Similar templates emerge for code patterns such as method invocations, printing
 the concatenation of two strings, and other common activities.  
 
-\jason{Talk about System.\metavar.\metavar("\metavar" + \metavar); pattern and how that evolves into
-System.out.println("\metavar" + \metavar);?}
+%%% No time.  Save for revision if accepted.
+%\jason{Talk about System.\metavar.\metavar("\metavar" + \metavar); pattern and how that evolves into
+%System.out.println("\metavar" + \metavar);?}
 
 \subsection{Pattern identification}
-
-\subsubsection{Clojure}
 \label{sec:clojure}
 
-Using a portion of the Clojure history, we computed the number of similar trees
-at each threshold. We looked at thresholds from 0 to 1 with an increment size
-of 0.01.  Looking at just the number of deletions, we examined the point where
-the number of deletions goes from 4 to 5 as the threshold changes from 0.35 to
-0.36.
+% \subsubsection{Clojure}
+
+Using a portion of the Clojure history, varied $\tau$ from 0 to 1 with an
+increment size of 0.01 as shown in Figure~\ref{fig:clojure-number-of-modifications}.  
+Looking at just the number of deletions, we examined the
+point where the number of deletions goes from 4 to 5 as the threshold changes
+from 0.35 to 0.36.
 
 The following code, presented in standard style of unified diff, shows a loop
 and the lines that were removed. This example comes from a file named {\tt
 PersistentArrayMap.java}:
 
-\jason{We should make sure none of these diffs get split over the page boundary}
+%\jason{We should make sure none of these diffs get split over the page boundary}
+
 \begin{java}
  public Object kvreduce(IFn f, Object init){
      for(int i=0;i < array.length;i+=2){
@@ -116,12 +119,15 @@ PersistentArrayMap.java}:
  }
 \end{java}
 
-Given the low threshold, this deletion was considered to be similar to the
-following deletions. This example comes from {\tt PersistentHashMap.java}.
-Note: Our parser ignores whitespace and gives the same AST for \verb|if (exp) { stmt; }|
-and \verb|if (exp) stmt;|. In the diff below, we have prefixed the
-lines that were considered to actually be different by our tool with ``>''
-characters:
+Given the low threshold, this deletion was considered to be similar following
+example from {\tt PersistentHashMap.java}.
+Note that whitespace in most languages is syntactically neutral and curly braces
+are optional for single statement conditional or loop bodies.  As a result,
+the parser used in this work gives the same AST for \verb|if (exp) { stmt; }|
+and \verb|if (exp) stmt;|.   Such changes are intermingled with syntactically meaningful
+changes in the unified diff format.  To clarify the specific difference that our tool 
+considers to actually be different, we have added a ``>'' prefix to the appropriate lines
+of the unified diff.
 
 \begin{java}
  public Object kvreduce(IFn f, Object init){
@@ -144,13 +150,16 @@ In both cases, our tool identified for-loops where the same lines are removed.
 In fact, the code for both of these is very similar perhaps owing to Java's
 HashMap and ArrayMap classes being very similar in terms of interface.
 Furthermore, it did this at the statement level, eg., we did not need to
-consider the similarities of the file names or the method names.
+consider the similarities of the file names or the method names.  The jump in
+group count as $\tau$ increased corresponds to the differences in the for-loops 
+that contain the change falling below the necessary threshold of
+similarity for grouping.
 
-\subsubsection{ANTLR}
+% \subsubsection{ANTLR}
 
-\jason{Should we just kill this section? I feel like we should have some lesson
-learned from the antlr source, but I don't know what to pick.}
+% \jason{Should we just kill this section? I feel like we should have some lesson
+% learned from the antlr source, but I don't know what to pick.}
 
-One of the challenges with finding interesting patterns in the ANTLR source is
-that some of the files are autogenerated. We would prefer to exclude
-autogenerated files from the analysis.
+% One of the challenges with finding interesting patterns in the ANTLR source is
+% that some of the files are autogenerated. We would prefer to exclude
+% autogenerated files from the analysis.
