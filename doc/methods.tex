@@ -11,6 +11,14 @@ parse tree or abstract syntax tree.  Mapping languages to a common aterm
 format allows the downstream portions of our workflow to be language-agnostic
 to a large degree, with minimal language-specific parameterization.
 
+\begin{figure}
+\begin{center}
+\includegraphics[height=0.44\textheight]{figures/workflow.pdf}
+\caption{workflow}
+\label{fig:workflow}
+\end{center}
+\end{figure}
+
 Once we have code in an aterm format, we can then apply a structural
 differencing algorithm between adjacent versions of each source file (e.g.,
 version $n$ of file $f$ is compared to version $n+1$ of file $f$).  The result

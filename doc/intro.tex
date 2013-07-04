@@ -47,6 +47,46 @@ preliminary results of this methodology as applied to version control
 repositories for open source projects available online.  The projects studied
 in this paper are ANTLR and Clojure, both written in Java.
 
+\subsection{Motivation}
+
+We would like to be able to take existing software projects and use the history
+stored in the VCS to answer questions which may be important to software
+developers, software project managers, language designers, and static analysis
+tools.
+
+For example the manager of a large software project may lead an effort to port
+an existing application to multicore.  After a successful port an interesting
+question to ask might be, what types of changes were needed to add mutual
+exclusion? Another question might be, do seemingly simple changes require large
+changes in the source code and why?  Answers to these questions could help
+inform future software development on the code base, such as making decisions
+about when is the right time to undertake a large restructuring.
+
+Language designers may want to know whether specific syntatic constructs would
+make the language more productive for users. Taking an example from Java, we
+might consider the addition of the {\tt foreach} loop construct. This feature
+could be partially justified by doing an analysis of existing source code to
+determine that most for-loops iterate over the entire collection. To strength
+this argument, it would be insightful to know what is the impact of maintaining
+the code without {\tt foreach}. For example, if refactoring the code commonly
+leads to editing the bounds to match the collection used, then the argument in
+favor of adding {\tt foreach} is strengthened, as now it helps to prevent a
+class of bugs where programmers forget to update the bounds.
+
+Software developers joining a new project or team are expected to learn the
+source code that they will be working with. We would like to provide these
+programmers with tools that aid them in this task by allowing them to see what
+types of changes other team members have made in the past. Software developers
+may also want to compare the changes that happen in response to related bugs,
+hoping to find opportunities to improve software quality, either by searching
+for buggy patterns in the source code or making a tool to detect the pattern in
+new code.
+
+%% TODO: cut this?
+
+In our own work, we seek to develop tools that help us identify patterns that
+can be fed into existing static analysis tools and rewriting systems.
+
 \subsection{Related work}
 
 The use of version control repositories as a source of data to track changes
