@@ -1,9 +1,15 @@
+\section{Future work}
+
+\jason{Correlate bug tickets with code changes}
+\jason{Vary the way we grab context before doing AU}
+
 \section{Conclusions}
 
-We have shown that patterns of change over the lifetime of a project can
-be obtaned through analysis of its version control history.  The use of
-tree differencing and tree similarity measures, as well as the anti-unification
-algorithm for computing generalized patterns, allows this large volume of difference data to be distilled into a compact form in which changes can be
+We have shown that patterns of change over the lifetime of a project can be
+obtaned through analysis of its version control history.  The use of tree
+differencing and tree similarity measures, as well as the anti-unification
+algorithm for computing generalized patterns, allows this large volume of
+difference data to be distilled into a compact form in which changes can be
 studied at the level of the base language syntax.  Analysis of the size and
 count of groups of similar changes as a function of a similarity threshold
 provides a disciplined way to identify generalizations of changes identified by
@@ -17,6 +23,12 @@ parameterization of the tool is necessary to then consume these terms, with
 language-specific parameters largely focused on specific nodes within the term
 that correspond to semantically useful subtree roots for providing context to
 tree differences.
+
+\jason{In summary, we satisfied our motivating claims$\ldots$}
+
+\jason{Fine granularity way of looking at code provides interesting
+opportunities for data mining$\ldots$}
+
 
 \subsection{Acknowledgments}
 
