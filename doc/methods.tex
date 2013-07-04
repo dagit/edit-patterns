@@ -155,6 +155,18 @@ the swapped case, where the left tree is missing nodes that are present in the
 right tree. Therefore, left and right holes represent an edit that removes or
 adds code respectively.
 
+Given a weave tree, we can extract the the subtrees that correspond to the
+three types of edits above.  An important consideration during extraction is
+how much context to extract for the subtrees. If we extract only the subtree,
+the rest of the analysis will be missing the context where the change took
+place. This information is useful when constructing patterns. We have
+(somewhat) arbitrarily chosen to extract the subtree along with the closest
+enclosing statement. For example, if the subtree was the expression {\tt i++;}
+with in the statement {\tt if(i < 100) i++;} we would extract the if-statement
+with the expression. In the future, we would like to explore other ways of
+extracting context, such as looking at the closest enclosing function (when it
+exists) or class.
+
 \subsection{Tree similarity metric and grouping}
 
 Given two trees $t_1$ and $t_2$, we would like to define a similarity metric
