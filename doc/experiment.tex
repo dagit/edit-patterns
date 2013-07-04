@@ -29,37 +29,37 @@ due to changes that were considered similar under a lower threshold being
 considered dissimilar under the more restrictive threshold.  For example, at
 $t=0.15$, a single pattern for for-loops is identified:
 
-\begin{verbatim}
-for ([]=[];[]<[];[]) {
-    []
+\begin{java}
+for ($\metavar$=$\metavar$;$\metavar$<$\metavar$;$\metavar$) {
+    $\metavar$
 }
-\end{verbatim}
+\end{java}
 
 As the threshold is increased to $t=0.25$, in addition to generic for-loops, a
 cohort of changes are identified to a more specific instance of the for-loop where
 the loop counter is initialized to zero:
 
-\begin{verbatim}
-for ([]=0;[]<[];[]) {
-    []
+\begin{java}
+for ($\metavar$=0;$\metavar$<$\metavar$;$\metavar$) {
+    $\metavar$
 }
-\end{verbatim}
+\end{java}
 
 Increasing to $t=0.35$, the pattern for the conditional becomes more specific
 and we see what appears to be a template for using the field of an object
 (e.g., {\tt args.length}) as the loop termination criterion:
 
-\begin{verbatim}
-for ([]=0;[]<[].[];[]) {
-    []
+\begin{java}
+for ($\metavar$=0;$\metavar$<$\metavar$.$\metavar$;$\metavar$) {
+    $\metavar$
 }
-\end{verbatim}
+\end{java}
 
 Similar templates emerge for code patterns such as method invocations, printing
 the concatenation of two strings, and other common activities.  
 
-\jason{Talk about System.[].[]("[]" + []); pattern and how that evolves into
-System.out.println("[]" + []);?}
+\jason{Talk about System.\metavar.\metavar("\metavar" + \metavar); pattern and how that evolves into
+System.out.println("\metavar" + \metavar);?}
 
 \subsection{Group sizes}
 
@@ -109,7 +109,7 @@ The following code, presented in a standard diff format, shows a loop and the
 lines that were removed. This example comes from a file named {\tt
 PersistentArrayMap.java}.
 
-\begin{verbatim}
+\begin{java}
  public Object kvreduce(IFn f, Object init){
      for(int i=0;i < array.length;i+=2){
          init = f.invoke(init, array[i], array[i+1]);
@@ -118,7 +118,7 @@ PersistentArrayMap.java}.
          }
      return init;
  }
-\end{verbatim}
+\end{java}
 
 Given the low threshold, this deletion was considered to be similar to the
 following deletions. This example comes from {\tt PersistentHashMap.java}.
@@ -127,22 +127,22 @@ and \verb|if (exp) stmt;|. In the diff below, we have prefixed the
 lines that were considered to actually be different by our tool with ``>''
 characters.
 
-\begin{verbatim}
-     public Object kvreduce(IFn f, Object init){
--        for(INode node : array){
--            if(node != null){
-+        for(INode node : array)
-+            {
-+            if(node != null)
-                 init = node.kvreduce(f,init);
->-                   if(RT.isReduced(init))
->-                           return ((IDeref)init).deref();
--                   }
+\begin{java}
+ public Object kvreduce(IFn f, Object init){
+-    for(INode node : array){
+-        if(node != null){
++    for(INode node : array)
++        {
++        if(node != null)
+             init = node.kvreduce(f,init);
+>-                if(RT.isReduced(init))
+>-                        return ((IDeref)init).deref();
 -               }
-+            }
-         return init;
-     }
-\end{verbatim}
+-           }
++        }
+     return init;
+ }
+\end{java}
 
 In both cases, our tool identified for-loops where the the same lines are
 removed. In fact, the code for both of these is very similar perhaps owing to

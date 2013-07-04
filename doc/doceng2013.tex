@@ -3,10 +3,49 @@
 \usepackage{url}
 \usepackage{graphics}
 \usepackage[textsize=footnotesize,bordercolor=black!20]{todonotes}
+\usepackage{microtype}
+\usepackage[T1]{fontenc}
+\usepackage[scaled]{beramono}
+\usepackage{listings}
 \newcommand{\claim}[1]{#1}
 
 \newcommand{\matt}[1]{\todo[inline,color=yellow!8]{#1}}
 \newcommand{\jason}[1]{\todo[inline,color=green!8]{#1}}
+
+\definecolor{javared}{rgb}{0.6,0,0} % for strings
+\definecolor{javagreen}{rgb}{0.25,0.5,0.35} % comments
+\definecolor{javapurple}{rgb}{0.5,0,0.35} % keywords
+\definecolor{javadocblue}{rgb}{0.25,0.35,0.75} % javadoc
+ 
+\newcommand\Small{\fontsize{8}{8.0}\selectfont}
+\newcommand*\LSTfont{\Small\ttfamily\SetTracking{encoding=*}{-60}\lsstyle}
+\lstset{language=Java,
+%basicstyle=\ttfamily,
+%% JED: Kill these lines if you want black&white
+keywordstyle=\color{javapurple}\bfseries,
+stringstyle=\color{javared},
+commentstyle=\color{javagreen},
+morecomment=[s][\color{javadocblue}]{/**}{*/},
+morecomment=[l][\bfseries\color{javared}]{>-\ },
+morecomment=[l][\color{javared}]{-\ },
+morecomment=[l][\color{javagreen}]{+\ },
+tabsize=4,
+showspaces=false,
+showstringspaces=false}
+
+\lstnewenvironment{java}[1][]
+{\lstset{#1,
+         frame=single, 
+         captionpos=b,
+         basicstyle=\LSTfont,
+         escapeinside={$}{$}}}
+%%          basicstyle=\scriptsize\ttfamily}}
+%%          basicstyle=\footnotesize\ttfamily}}
+{}
+
+\newcommand{\metavar}{$\square$}
+%\newcommand{\metavar}{$\bullet$}
+%\newcommand{\metavar}{\rule{1em}{1em}}
 
 \begin{document}
 
