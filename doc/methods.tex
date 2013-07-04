@@ -69,7 +69,7 @@ The structure of ATerms is given by this simple syntax:
 This structure is sufficient for us to encode typical abstract syntax trees if
 we allows ourselves to use the string label of the `AAppl' portion of the
 ATerm. This is most easily illustrated with an exmaple.  Suppose that we have
-the Java AST for the statement {\tt i++; }.  In a textual form, this portion of
+the Java AST for the statement {\tt i++;}.  In a textual form, this portion of
 the AST would be represented by:
 
 \begin{verbatim}
@@ -136,7 +136,7 @@ left and right mismatches and left and right holes.
 Left and right mismatches represent an edit to an existing node of the AST\@.
 A left mismatch represents the change before the edit and the right mismatch
 contains the change after the edit.  Using our previous example of the Java
-statement {\tt i++; }, if we changed this to {\tt j++;}, we could get a left
+statement {\tt i++;}, if we changed this to {\tt j++;}, we could get a left
 and right mismatch where the left mismatch is {\tt AAppl
 "\textbackslash"i\textbackslash"" []} and the right mismatch is {\tt AAppl
 "\textbackslash"j\textbackslash"" []}. 
@@ -156,16 +156,19 @@ algorithm, a similarity score is provided for comparing $t_a$ and $t_b$. This
 metric is order dependent, forcing the maximal score to be the size of the
 first tree ($t_a$), even if $t_b$ is larger.  If the trees are identical, the
 score will be exactly $|t_a|$, the number of nodes in $t_a$.  If they differ,
-it will be strictly less than $|t_a|$.  As such, we define our distance
-function to be $\frac{d(t_a, t_b)}{|t_a|}$.  This operator is not commutative,
-since it is easy to find instances such that $\frac{d(t_b, t_a)}{|t_b|} \neq
-\frac{d(t_a, t_b)}{|t_a|}$ when the trees are very different.
+it will be strictly less than $|t_a|$.  As such, it would be possible to define
+our distance function to be $\frac{d(t_a, t_b)}{|t_a|}$, but this operator is
+not symmetric, since it is easy to find instances such that $\frac{d(t_b,
+t_a)}{|t_b|} \neq \frac{d(t_a, t_b)}{|t_a|}$ when the trees are very different.
+Instead, we define $\Delta(t_a, t_b)$ to be the metric
+$$\Delta(t_a, t_b) := \frac{min(d(t_a, t_b),d(t_b, t_a))}{max(|t_a|,|t_b|)}$$
+where the $min$ and $max$ functions force the calculation to be symmetric.
 
 Once we have the set of changes that were detected from the VCS history,
 we can generate a forest of trees $t_1, \cdots, t_n$ such that we can
 compute the $n^2$ distances between all pairs to generate a distance matrix
-$D$ where $D_{ij} = d(t_i, t_j)$.  Given a threshold value $\tau$, we can
-produce a boolean matrix $D'$ where $D'_{ij} = d(t_i, t_j) > \tau$.  An
+$D$ where $D_{ij} = \Delta(t_i, t_j)$.  Given a threshold value $\tau$, we can
+produce a boolean matrix $D'$ where $D'_{ij} = \Delta(t_i, t_j) > \tau$.  An
 example matrix is shown in Figure~\ref{fig:boolmat} for changes observed
 in the VCS for ANTLR where $\tau = 0.9$.  
 
