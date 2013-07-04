@@ -32,8 +32,8 @@ abstract syntax tree or parse tree of a language can be used to map text
 differences stored in a VCS to a form where syntactic changes can be reasoned
 about.
 
-\item We show that the anti-unification algorithm of BLAH can be used to map
-similar changes to a generalized change pattern.
+\item We show that anti-unification can be used to map similar changes to a
+generalized change pattern.
 
 \item We show that clustering by a tree similarity metric allows differences
 to be grouped such that the families of changes to generalize via anti-
@@ -46,6 +46,8 @@ In this paper, we briefly describe the building blocks of our work and show
 preliminary results of this methodology as applied to version control
 repositories for open source projects available online.  The projects studied
 in this paper are ANTLR and Clojure, both written in Java.
+
+\jason{Is it ANTLR or Antlr?}
 
 \subsection{Motivation}
 
@@ -89,8 +91,25 @@ can be fed into existing static analysis tools and rewriting systems.
 
 \subsection{Related work}
 
-The use of version control repositories as a source of data to track changes
-over time is not new, but our approach to the problem is novel. 
-These may be very
-related~\cite{weissgerber06identify, kim07automatic, neamtiu05understand} - I
-need to quickly re-scan these to see the overlap.  
+The use of version control repositories as a source of data to study changes
+to code over time is not new, but our approach to the problem is novel.
+Neamtiu~\cite{neamtiu05understand} uses a similar approach of analyzing the
+abstract syntax tree of code in successive program versions, but focuses on
+detecting change occurrences only instead of going a step further and
+attempting to identify any common patterns of change that can be found.  
+Other groups have focused on identifying patterns based on common
+refactorings that can be identified in the code~\cite{weissgerber06identify},
+and seek to infer simple abstract rules that encapsulate the changes
+that they detect~\cite{kim07automatic}.  For example, one such rule could
+indicate that for all calls that match a certain pattern, an additional
+argument should be added to their argument list.
+
+This goal of generating abstract rules is similar to our goal of inferring
+generic patterns via anti-unification.  What differs with our approach is
+that we presuppose no knowledge of the underlying language beyond the structure
+provided by the language parser and its mapping to the aterm format.  As such,
+it is challenging to build rules that give an interpretation to the program
+abstract syntax, such as ``append an argument to the function call'', since
+we do not provide a mapping from the concept of ``function call'' to a pattern
+of AST nodes.  By instead emitting templates in terms of the language AST in
+aterm form, we are able to keep the tool as language-neutral as possible.
