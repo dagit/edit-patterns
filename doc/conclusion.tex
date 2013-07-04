@@ -1,13 +1,8 @@
-\section{Future work}
-
-\jason{Correlate bug tickets with code changes}
-\jason{Vary the way we grab context before doing AU}
-
-\section{Conclusions}
+\section{Conclusions and future work}
 
 We have shown that patterns of change over the lifetime of a project can be
-obtaned through analysis of its version control history.  The use of tree
-differencing and tree similarity measures, as well as the anti-unification
+obtained through analysis of its version control history.  The use of tree
+differencing and tree similarity measures, as well as the antiunification
 algorithm for computing generalized patterns, allows this large volume of
 difference data to be distilled into a compact form in which changes can be
 studied at the level of the base language syntax.  Analysis of the size and
@@ -24,11 +19,31 @@ language-specific parameters largely focused on specific nodes within the term
 that correspond to semantically useful subtree roots for providing context to
 tree differences.
 
-\jason{In summary, we satisfied our motivating claims$\ldots$}
+In Section~\ref{sec:threshold}, we showed that our approach can highlight the
+evolution of code structurally. In fact, our example of the for-loop precisely
+supports the hypothetical language designer argument laid out in
+Section~\ref{sec:motivation}.
 
-\jason{Fine granularity way of looking at code provides interesting
-opportunities for data mining$\ldots$}
+In Section~\ref{sec:clojure}, we were able to find related changes in different
+files that happened as part of the same commit. Not only were we able to remove
+noise compared to line-based diff, but we were also looking at the Clojure
+source for the first time and able to see an important relationship between the
+internals of the classes in those two files. As programmers who are completely
+new to the Clojure source we were able to gain valuable insight.
 
+%% Future work after this point
+
+Our experiment relied on a simple replay of the history of a software project.
+There are other meaningful ways to generate the set of files to analyze. One
+such example would be to correlate code changes to bug fixes and bug reports
+and then push those changes through our workflow to find patterns.  As
+mentioned in Section\ref{sec:motivation} this may provide a support to quality
+assurance practices.
+
+In Section~\ref{sec:weaving} we explored one way to extract context. Many
+different heuristics would be suitable here. Studying the trade-offs of
+different heuristics would allow us to fine tune our approach depending on the
+application and what we wanted to learn about the source code.
 
 \subsection{Acknowledgments}
 

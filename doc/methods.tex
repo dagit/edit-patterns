@@ -1,15 +1,15 @@
 
 \section{Methodology}
 
-We propose the following workflow for studying software evolution via VCS
-data.  First, each version of all source files in the project are
-reconstituted from the differences stored within the VCS such that each
-version of a file can be parsed by an appropriate language front end.  Each
-front-end is configured to map the parsed code to an annotated term (or,
-aterm)~\cite{brand00aterm} that represents a standardized serialization of the
-parse tree or abstract syntax tree.  Mapping languages to a common aterm
-format allows the downstream portions of our workflow to be language-agnostic
-to a large degree, with minimal language-specific parameterization.
+We propose the following workflow for studying software evolution via VCS data.
+First, each version of all source files in the project are reconstituted from
+the differences stored within the VCS such that each version of a file can be
+parsed by an appropriate language front end.  Each front-end is configured to
+map the parsed code to an annotated term (or, aterm)~\cite{brand00aterm} that
+represents a standardized serialization of the AST\@.  Mapping languages to a
+common aterm format allows the downstream portions of our workflow to be
+language-agnostic to a large degree, with minimal language-specific
+parameterization.
 
 \begin{figure}
 \begin{center}
@@ -50,7 +50,7 @@ project\footnote{\url{http://clonedigger.sourceforge.net}} was used, which
 itself is an implementation of the classical antiunitification algorithm of
 Reynolds~\cite{reynolds69antiunification}.
 
-In the following sections, we descibe the steps above in greater detail.
+In the following sections, we describe the steps above in greater detail.
 
 \subsection{Parsing and aterm generation}
 
@@ -63,7 +63,7 @@ achieved via language-specific parsers.  In this work, we used the
 language-java parser available as open source libraries accessible via the
 Haskell programming language.
 
-The structure of ATerms is given by this simple syntax:
+The structure of aterms is given by this simple syntax:
 \setlength{\grammarindent}{8em}
 \begin{grammar}
 <aterm> ::= `AAppl' <string> <aterm-list>
@@ -76,7 +76,7 @@ The structure of ATerms is given by this simple syntax:
 
 This structure is sufficient for us to encode typical abstract syntax trees if
 we allows ourselves to use the string label of the `AAppl' portion of the
-ATerm. This is most easily illustrated with an exmaple.  Suppose that we have
+aterm. This is most easily illustrated with an example.  Suppose that we have
 the Java AST for the statement {\tt i++;}.  In a textual form, this portion of
 the AST would be represented by:
 
@@ -87,7 +87,7 @@ ExpStmt
       (Name [Ident "i"])))
 \end{verbatim}
 
-The translation to ATerm would give us,
+The translation to aterm would give us,
 
 \begin{verbatim}
 AAppl "ExpStmt"
@@ -98,7 +98,7 @@ AAppl "ExpStmt"
 \end{verbatim}
 
 Notice that for strings, such as identifier names, we place double quotes
-around the string inside the label portion of the ATerm. The ATerm
+around the string inside the label portion of the aterm. The aterm
 representation allows for nodes to be shared within the tree. While this is a
 useful optimization for saving space, we chose to go with the simpler unshared
 representation in our prototype.
@@ -125,13 +125,14 @@ to turn each tree into the other.  These edit trees are then post-processed
 after Yang's algorithm is applied to generate what we call a weave tree.
 
 \subsection{Weaving structural differences}
+\label{sec:weaving}
 
-The next step of our processing takes the edit trees from the the tree diff
+The next step of our processing takes the edit trees from the tree diff
 algorithm and overlays them to create a weave tree. The purpose of the weave
 tree is two fold. First, it gives us a way to identify the kinds of changes
 where they happen instead of having them implicitly represented as a sequence
 of isolated operations. Secondly, it allows us to visualize the two trees
-overlayed on each other. The kinds of edits that we separate into are
+overlaid on each other. The kinds of changes that we separate into are
 modifications, adding nodes, and removing nodes.
 
 To separate the modifications into the different kinds, we consider the type of
@@ -155,17 +156,17 @@ the swapped case, where the left tree is missing nodes that are present in the
 right tree. Therefore, left and right holes represent an edit that removes or
 adds code respectively.
 
-Given a weave tree, we can extract the the subtrees that correspond to the
-three types of edits above.  An important consideration during extraction is
-how much context to extract for the subtrees. If we extract only the subtree,
-the rest of the analysis will be missing the context where the change took
-place. This information is useful when constructing patterns. We have
-(somewhat) arbitrarily chosen to extract the subtree along with the closest
-enclosing statement. For example, if the subtree was the expression {\tt i++;}
-with in the statement {\tt if(i < 100) i++;} we would extract the if-statement
-with the expression. In the future, we would like to explore other ways of
-extracting context, such as looking at the closest enclosing function (when it
-exists) or class.
+Given a weave tree, we can extract the subtrees that correspond to the three
+types of changes above.  An important consideration during extraction is how
+much context to extract for the subtrees. If we extract only the subtree, the
+rest of the analysis will be missing the context where the change took place.
+This information is useful when constructing patterns. We have (somewhat)
+arbitrarily chosen to extract the subtree along with the closest enclosing
+statement. For example, if the subtree was the expression {\tt i++;} with in
+the statement {\tt if(i < 100) i++;} we would extract the if-statement with the
+expression. In the future, we would like to explore other ways of extracting
+context, such as looking at the closest enclosing function (when it exists) or
+class.
 
 \subsection{Tree similarity metric and grouping}
 
@@ -216,7 +217,7 @@ control flow, we would expect to see mismatches where the tree changes in a
 way where the structural change can be thought of as a  coupled deletion and
 insertion operation (such as changing a variable name in an expression).
 
-\subsection{Anti-unification and template generation}
+\subsection{Antiunification and template generation}
 
 Once we have groups of related code snippets in the form of related subtrees,
 we can seek patterns that relate changes.  For example, say we have a function
@@ -225,7 +226,7 @@ call $foo()$ where each invocation of the function uses the same parameters
 parameter at the end of each call where the variable passed in differs each
 time (e.g., $foo(x,y,a)$ and $foo(x,y,b)$), we would like to abstract out this
 change as $foo(x,y,VAR)$, where each instance of the change replaces $VAR$
-with whatever concrete variable is used at that point.  The anti-unification
+with whatever concrete variable is used at that point.  The antiunification
 algorithm is built for this purpose -- given two trees, it seeks the least-
 general generalization of the pair and produces a triplet representing the
 generalized tree with a metavariable introduced where the two differ, as well

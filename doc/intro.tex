@@ -28,17 +28,16 @@ Our contributions described in this work are:
 \begin{itemize}
 
 \item We show that structural differencing algorithms that operate on the
-abstract syntax tree or parse tree of a language can be used to map text
+parse tree or abstract syntax tree (AST) of a language can be used to map text
 differences stored in a VCS to a form where syntactic changes can be reasoned
 about.
 
-\item We show that anti-unification can be used to map similar changes to a
+\item We show that antiunification can be used to map similar changes to a
 generalized change pattern.
 
-\item We show that clustering by a tree similarity metric allows differences
-to be grouped such that the families of changes to generalize via anti-
-unification can be inferred from the differences using a basic similarlity
-threshold.
+\item We show that grouping by a tree similarity metric allows differences to
+be grouped such that the families of changes to generalize via antiunification
+can be inferred from the differences using a basic similarity threshold.
 
 \end{itemize}
 
@@ -50,6 +49,7 @@ Clojure\footnote{\url{https://github.com/clojure/clojure}}, both written in
 Java.
 
 \subsection{Motivation}
+\label{sec:motivation}
 
 We would like to be able to take existing software projects and use the history
 stored in the VCS to answer questions which may be important to software
@@ -64,7 +64,7 @@ changes in the source code and why?  Answers to these questions could help
 inform future software development on the code base, such as making decisions
 about when is the right time to undertake a large restructuring.
 
-Language designers may want to know whether specific syntatic constructs would
+Language designers may want to know whether specific syntactic constructs would
 make the language more productive for users. Taking an example from Java, we
 might consider the addition of the {\tt foreach} loop construct. This feature
 could be partially justified by doing an analysis of existing source code to
@@ -105,7 +105,7 @@ indicate that for all calls that match a certain pattern, an additional
 argument should be added to their argument list.
 
 This goal of generating abstract rules is similar to our goal of inferring
-generic patterns via anti-unification.  What differs with our approach is
+generic patterns via antiunification.  What differs with our approach is
 that we presuppose no knowledge of the underlying language beyond the structure
 provided by the language parser and its mapping to the aterm format.  As such,
 it is challenging to build rules that give an interpretation to the program

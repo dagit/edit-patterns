@@ -112,22 +112,39 @@ Matthew Sottile\\
 \maketitle
 \begin{abstract}
 
+%% Submitted abstract
+%%Traditional algorithms for detecting differences in source code focus on
+%%differences between lines.  As such, little can be learned about abstract
+%%changes that occur over time within a project.  Structural differencing on the
+%%program parse tree reveals changes at the syntactic level within code, which
+%%allows us to further process the differences to understand their meaning. We
+%%propose that clustering of changes by some metric of similarity, followed by
+%%pattern extraction via antiunification will allow us to identify patterns of
+%%change  within a software project from the sequence of changes contained
+%%within a Version Control System (VCS). Tree similarity metrics such as a tree
+%%edit distance can be used to cluster changes in order to identify groupings
+%%that may represent a single class of change (e.g., adding a
+%%parameter to a function call). By applying antiunification within each cluster
+%%we are able to generalize from families of concrete changes to patterns of
+%%structural change. Studying patterns of change at the structural level,
+%%instead of line-by-line, allows us to gain insight into the evolution of
+%%software.
+
 Traditional algorithms for detecting differences in source code focus on
 differences between lines.  As such, little can be learned about abstract
 changes that occur over time within a project.  Structural differencing on the
-program parse tree reveals changes at the syntactic level within code, which
-allows us to further process the differences to understand their meaning. We
-propose that clustering of changes by some metric of similarity, followed by
-pattern extraction via antiunification will allow us to identify patterns of
-change  within a software project from the sequence of changes contained
-within a Version Control System (VCS). Tree similarity metrics such as a tree
-edit distance can be used to cluster changes in order to identify groupings
-that may represent a single class of change (e.g., adding a
-parameter to a function call). By applying antiunification within each cluster
-we are able to generalize from families of concrete changes to patterns of
-structural change. Studying patterns of change at the structural level,
-instead of line-by-line, allows us to gain insight into the evolution of
-software.
+program's abstract syntax tree reveals changes at the syntactic level within
+code, which allows us to further process the differences to understand their
+meaning. We propose that grouping of changes by some metric of similarity,
+followed by pattern extraction via antiunification will allow us to identify
+patterns of change  within a software project from the sequence of changes
+contained within a Version Control System (VCS). Tree similarity metrics such
+as a tree edit distance can be used to group changes in order to identify
+groupings that may represent a single class of change (e.g., adding a parameter
+to a function call). By applying antiunification within each group we are
+able to generalize from families of concrete changes to patterns of structural
+change.  Studying patterns of change at the structural level, instead of
+line-by-line, allows us to gain insight into the evolution of software.
 
 \end{abstract}
 
@@ -139,7 +156,7 @@ software.
 
 %\terms{Theory} % TODO: changeme
 
-\keywords{version control, structural differencing, anti-unification, software evolution}
+\keywords{version control, structural differencing, antiunification, software evolution}
 
 \input{intro}
 \input{methods}
