@@ -64,7 +64,7 @@ tools.  In the absence of a common intermediate representation or abstract
 syntax representation for popular languages, we adopted a standardized
 serialization format in the form of annotated terms.  Generation of aterms was
 achieved via language-specific parsers.  In this work, we used the
-{\tt language-java} parser available as open source libraries accessible via the
+{\tt language-java} parser available as an open source library accessible via the
 Haskell programming language.
 
 The structure of aterms is given by this simple syntax:
@@ -105,7 +105,7 @@ Notice that for strings, such as identifier names, we place double quotes
 around the string inside the label portion of the aterm. Implementations of
 aterms often provide a representation that allows for nodes to be shared
 within the tree. While this is a useful optimization for saving space, we
-chose use the simpler unshared representation in our prototype due to the
+chose to use the simpler unshared representation in our prototype due to the
 clearer expression of the tree analysis algorithms over the unshared form of
 the structure.
 
@@ -192,14 +192,14 @@ where the change occurred, it is most useful to know whether or not that
 fragment occurred within an expression, a for-loop, or as a standalone
 statement. As such, we have chosen for the work presented here to extract the
 subtree along with the closest enclosing statement. For example, if the
-subtree was the expression {\tt i++;} with in the statement {\tt if(i < 100)
+subtree was the expression {\tt i++;} within the statement {\tt if(i < 100)
 i++;} we would extract the if-statement with the expression.
 
 This is achieved by including the subtree rooted at the nearest ancestor
 (which must be a matching point in the woven edit trees) to a change
 representing an appropriate abstract syntax element.   In the future, we would
 like to explore other ways of extracting context, such as looking at the
-closest enclosing expression, function (when it exists) or class.  This
+closest enclosing expression, function (when it exists), or class.  This
 information should also be parameterizable to support differences in important
 AST nodes that varies between languages.
 
