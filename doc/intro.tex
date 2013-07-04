@@ -1,43 +1,56 @@
 \section{Introduction}
 %% 1. Describe the problem
 
-Version control systems (VCS's) track the evolution of software over time in the form
-of a sequence of changes to the plain text representation of the code.
-We would like to be able to characterize the changes to files in a software
-project according to the type of change that they represent.  The ability to
-map these changes to the syntax of the language, instead of its raw text
-representation, will allow them to be understood in terms of the language
-constructs themselves.  Doing so will allow us to identify patterns of
-changes at the abstract syntax level to support insight at a deeper level
-than achievable by examining raw text differences.  For example, in
-an operating system kernel, a set of drivers may need to be updated to use a
-new mutual exclusion mechanism. In this example, blocks of code that access
-specific resources need to be updated to take a semaphore before proceeding.
+\jason{Please read intro: major tweaks present}
+
+Version control systems (VCS's) track the evolution of software over time in
+the form of a sequence of changes to the plain text representation of the
+code. We would like to be able to characterize the changes to files in a
+software project according to the type of change that they represent.  The
+ability to map these changes to the syntax of the language, instead of its raw
+text representation, will allow them to be understood in terms of the language
+constructs themselves.  Doing so will allow us to identify patterns of changes
+at the abstract syntax level, separate from syntax neutral changes to the text
+such as layout variations.  As a result, the interpretation of changes is
+made unambiguous given the definition of the abstract syntax of the language.
 
 Finding common patterns for the changes to a source file gives us the ability
-to understand, at a higher level, what sorts of revisions are happening. If we
-already know to look for changes to semaphore handling we may think to use a
-textual search tool, such as {\tt grep}, to search the source code for
-functions related to semaphores. Instead, suppose we have the challenge that we
-are not familiar with the source code and we would like to understand at a
-structural level what types of changes were needed to add support for the new
-semaphores.
+to understand, at a higher level, what sorts of revisions are happening.
+Detecting simple changes, such as semaphore handling changes in system-level
+software, we may think to use a textual search tool, such as {\tt grep}, to
+search the source code for functions related to semaphores. Such tools are
+unable to easily identify more complex patterns though that have no single
+textual representation, such as instances of semaphore handling calls being made
+within conditionals where the format of the conditional can vary.  Structure
+aware searching would be necessary in this case, as treating the program as
+raw text ignores important syntactic structure.
 
-Our contributions described in this work are:
+In an even more complicated situation, a programmer may be faced with a
+code base that they are unfamiliar with.  In this case, the programmer may not
+know a-priori what kinds of structures are important to look for related to
+a certain kind of change.  Here, we would like to use the differences that are
+recorded in the VCS during the period of time when the change of interest was
+being performed to discover the structural patterns that represent the high
+level structure of the changes.  In this way, our goal is to not provide simply
+a sophisticated search tool, but to provide a method for identifying patterns 
+of code changes over a period of time.
+
+Our contributions towards this goal presented in this paper are:
 
 \begin{itemize}
 
 \item We show that structural differencing algorithms that operate on the
-parse tree or abstract syntax tree (AST) of a language can be used to map text
-differences stored in a VCS to a form where syntactic changes can be reasoned
-about.
+abstract syntax tree (AST) of a language can be used to map text
+differences stored in a VCS to a form where the syntactic meaning of changes
+can be reasoned about.
 
-\item We show that antiunification can be used to map similar changes to a
-generalized change pattern.
+\item We show that the antiunification algorithm that seeks the ``least general
+generalization'' of a set of trees can be used to map changes considered to be
+sufficiently similar to a meaningful generalized change pattern.
 
-\item We show that grouping by a tree similarity metric allows differences to
-be grouped such that the families of changes to generalize via antiunification
-can be inferred from the differences using a basic similarity threshold.
+\item We show that a thresholded tree similarity metric derived from
+a tree edit distance score provides a useful grouping mechanism to define
+the notion of ``sufficiently similar''.
 
 \end{itemize}
 
@@ -50,25 +63,35 @@ Java.
 
 \subsection{Motivation}
 \label{sec:motivation}
-\jason{Please read this and revise as you see fit}
+
 We would like to be able to take existing software projects and use the history
 stored in the VCS to answer questions which may be important to software
 developers, software project managers, language designers, and static analysis
 tools.
 
-For example the manager of a large software project may lead an effort to port
-an existing application to multicore.  After a successful port an interesting
-question to ask might be, what types of changes were needed to add mutual
-exclusion? Another question might be, do seemingly simple changes require large
-changes in the source code and why?  Answers to these questions could help
-inform future software development on the code base, such as making decisions
-about when is the right time to undertake a large restructuring.
+Consider a problem that has been faced by many projects in the last decade ---
+the challenge of migrating to utilize multicore processors.  A manager who is
+leading a large software project may want to answer important questions to
+help inform future development: what sorts of constructs were removed or added?
+This can reveal patterns of code that were thread unsafe in the pre-multicore
+code that developers (especially those not participating in the multicore port)
+should be made aware of in the future.  It can also reveal repeated patterns that
+were added, indicating potential refactorings that may be desirable to apply
+in order to reduce the proliferation of code clones within the project.
+
+% For example the manager of a large software project may lead an effort to port
+% an existing application to multicore.  After a successful port an interesting
+% question to ask might be, what types of changes were needed to add mutual
+% exclusion? Another question might be, do seemingly simple changes require large
+% changes in the source code and why?  Answers to these questions could help
+% inform future software development on the code base, such as making decisions
+% about when is the right time to undertake a large restructuring.
 
 Language designers may want to know whether specific syntactic constructs would
 make the language more productive for users. Taking an example from Java, we
 might consider the addition of the for-each loop construct. This feature
 could be partially justified by doing an analysis of existing source code to
-determine that most for-loops iterate over the entire collection. To strengthen
+determine that most for-loops iterate over an entire collection. To strengthen
 this argument, it would be insightful to know what is the impact of maintaining
 the code without for-each. For example, if refactoring the code commonly
 leads to editing the bounds to match the collection used, then the argument in
@@ -82,12 +105,7 @@ types of changes other team members have made in the past. Software developers
 may also want to compare the changes that happen in response to related bugs,
 hoping to find opportunities to improve software quality, either by searching
 for buggy patterns in the source code or making a tool to detect the pattern in
-new code.
-
-\jason{cut this?}
-
-In our own work, we seek to develop tools that help us identify patterns that
-can be fed into existing static analysis tools and rewriting systems.
+new code.  
 
 \subsection{Related work}
 
@@ -105,12 +123,14 @@ indicate that for all calls that match a certain pattern, an additional
 argument should be added to their argument list.
 
 This goal of generating abstract rules is similar to our goal of inferring
-generic patterns via antiunification.  What differs with our approach is that
-we presuppose no knowledge of the underlying language beyond the structure
-provided by the language parser and its mapping to an annotated term (or,
-aterm)~\cite{brand00aterm} format.  As such, it is challenging to build rules
-that give an interpretation to the program abstract syntax, such as ``append an
-argument to the function call'', since we do not provide a mapping from the
-concept of ``function call'' to a pattern of AST nodes.  By instead emitting
-templates in terms of the language AST in aterm form, we are able to keep the
-tool as language-neutral as possible.
+generic patterns in terms via
+antiunification~\cite{reynolds70antiunification,plotkin70antiunification}.
+What differs with our approach is that we presuppose no knowledge of the
+underlying language beyond the structure provided by the language parser and
+its mapping to an annotated term (or, aterm)~\cite{brand00aterm} format.  As
+such, it is challenging to build rules that give an interpretation to the
+program abstract syntax, such as ``append an argument to the function call'',
+since we do not provide a mapping from the concept of ``function call'' to a
+pattern of AST nodes.  By instead emitting templates in terms of the language
+AST in aterm form, we are able to keep the tool as language-neutral as
+possible.
