@@ -13,22 +13,49 @@ The first experiment that we performed was to investigate the effect of
 similarity threshold to the number of groups identified, as well as the degree
 of generality present in the tree that results from all members of each group
 being antiunified together. Our prediction was that at the lowest threshold
-(0.0), when all trees are considered to be similar, their antiunification
-will yield the most general pattern.  This is what was observed, in which the
+(0.0), when all trees are considered to be similar, their antiunification will
+yield the most general pattern.  This is what was observed, in which the
 antiunification result is a tree composed of a single metavariable node.
 Similarly, at the highest threshold (1.0), the only groupings that will be
 present will be single tree sets, or sets containing identical trees for
 instances of identical changes that occurred in different places.  This is
 precisely what we observed, with the antiunified trees containing no meta-
 variables since antiunification of a set of identical elements is the element
-itself.  We show the number of groups (broken down by type: code addition,
-code deletion, or code mutation) as a function of threshold in
-Figure~\ref{fig:thresholdplot}.
+itself.
 
-As we can see, as the threshold increases, we see more groupings of changes
-due to changes that were considered similar under a lower threshold being
-considered dissimilar under the more restrictive threshold.  For example, at
-$\tau=0.15$, a single pattern for for-loops is identified:
+\subsection{Group sizes}
+\label{sec:groups}
+  
+We show the number of groups (broken down by type: addition, deletion, or
+modification) as a function of threshold of similarity ($\tau$).
+Figure~\ref{fig:clojure-number-of-modifications} shows the size of the groups
+for the Clojure history and Figure~\ref{fig:antlr-number-of-modifications}
+shows the size of the groups for the ANTLR history. In both cases, we only
+consider a small portion of the full history of the VCS.
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=0.44\textwidth]{figures/clojure-number-of-modifications.pdf}
+\caption{Number of additions, deletions, and modifications by threshold for the Clojure source}
+\label{fig:clojure-number-of-modifications}
+\end{center}
+\end{figure}
+\jason{Why so much space between Figure~\ref{fig:clojure-number-of-modifications} and Figure~\ref{fig:antlr-number-of-modifications}?}
+\begin{figure}
+\begin{center}
+\includegraphics[width=0.44\textwidth]{figures/antlr-number-of-modifications.pdf}
+\caption{Number of additions, deletions, and modifications by threshold for the ANTLR source}
+\label{fig:antlr-number-of-modifications}
+\end{center}
+\end{figure}
+
+At the maximum threshold of 1, the total number of changes is less than the
+number of trees we started with, because some changes end up being identical.
+As we can see, as the threshold increases, we see more groupings of changes due
+to changes that were considered similar under a lower threshold being
+considered dissimilar under the more restrictive threshold.
+
+As an example, at $\tau=0.15$, a single pattern for for-loops is identified:
 
 \begin{java}
 for ($\metavar$=$\metavar$;$\metavar$<$\metavar$;$\metavar$) {
@@ -62,57 +89,22 @@ the concatenation of two strings, and other common activities.
 \jason{Talk about System.\metavar.\metavar("\metavar" + \metavar); pattern and how that evolves into
 System.out.println("\metavar" + \metavar);?}
 
-\subsection{Group sizes}
-\label{sec:groups}
-
-\jason{Are we talking about AU groups or the more broad types of changes groups?
-I wrote this to be the latter, but they're both interesting and related.}
-
-We also considered how the sizes of groups changed as we varied the threshold
-of similarity ($\tau$). Figure~\ref{fig:clojure-number-of-modifications} shows
-the size of the groups for the Clojure history and
-Figure~\ref{fig:antlr-number-of-modifications} shows the size of the groups for
-the ANTLR history. In both cases, we only consider a small portion of the full
-history of the VCS.
-
-\begin{figure}
-\begin{center}
-\includegraphics[width=0.44\textwidth]{figures/clojure-number-of-modifications.pdf}
-\caption{Number of additions, deletions, and modifications by threshold for the Clojure source}
-\label{fig:clojure-number-of-modifications}
-\end{center}
-\end{figure}
-
-\begin{figure}
-\begin{center}
-\includegraphics[width=0.44\textwidth]{figures/antlr-number-of-modifications.pdf}
-\caption{Number of additions, deletions, and modifications by threshold for the ANTLR source}
-\label{fig:antlr-number-of-modifications}
-\end{center}
-\end{figure}
-
-The graphs show us that as the threshold increases the number of distinct trees
-increases. At the maximum threshold of 1, the total number of changes is less
-than the number of trees we started with, because some changes end up being
-identical.
-
 \subsection{Pattern identification}
 
 \subsubsection{Clojure}
 \label{sec:clojure}
 
 Using a portion of the Clojure history, we computed the number of similar trees
-at each threshold. See figure~\ref{fig:clojure-number-of-modifications} to see
-the number of changes by time as a function of the threshold. We looked at
-thresholds from 0 to 1 with an increment size of 0.01.
+at each threshold. We looked at thresholds from 0 to 1 with an increment size
+of 0.01.  Looking at just the number of deletions, we examined the point where
+the number of deletions goes from 4 to 5 as the threshold changes from 0.35 to
+0.36.
 
-Looking at just the number of deletions, we examined the point where the number
-of deletions goes from 4 to 5 as the threshold changes from 0.35 to 0.36.
+The following code, presented in standard style of unified diff, shows a loop
+and the lines that were removed. This example comes from a file named {\tt
+PersistentArrayMap.java}:
 
-The following code, presented in a standard diff format, shows a loop and the
-lines that were removed. This example comes from a file named {\tt
-PersistentArrayMap.java}.
-
+\jason{We should make sure none of these diffs get split over the page boundary}
 \begin{java}
  public Object kvreduce(IFn f, Object init){
      for(int i=0;i < array.length;i+=2){
@@ -129,7 +121,7 @@ following deletions. This example comes from {\tt PersistentHashMap.java}.
 Note: Our parser ignores whitespace and gives the same AST for \verb|if (exp) { stmt; }|
 and \verb|if (exp) stmt;|. In the diff below, we have prefixed the
 lines that were considered to actually be different by our tool with ``>''
-characters.
+characters:
 
 \begin{java}
  public Object kvreduce(IFn f, Object init){
@@ -155,6 +147,9 @@ Furthermore, it did this at the statement level, eg., we did not need to
 consider the similarities of the file names or the method names.
 
 \subsubsection{ANTLR}
+
+\jason{Should we just kill this section? I feel like we should have some lesson
+learned from the antlr source, but I don't know what to pick.}
 
 One of the challenges with finding interesting patterns in the ANTLR source is
 that some of the files are autogenerated. We would prefer to exclude

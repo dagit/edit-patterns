@@ -1,20 +1,20 @@
 
 \section{Methodology}
+\label{sec:method}
 
 We propose the following workflow for studying software evolution via VCS data.
 First, each version of all source files in the project are reconstituted from
 the differences stored within the VCS such that each version of a file can be
 parsed by an appropriate language front end.  Each front-end is configured to
-map the parsed code to an annotated term (or, aterm)~\cite{brand00aterm} that
-represents a standardized serialization of the AST\@.  Mapping languages to a
-common aterm format allows the downstream portions of our workflow to be
-language-agnostic to a large degree, with minimal language-specific
-parameterization.
+map the parsed code to an aterm that represents a standardized serialization of
+the AST\@.  Mapping languages to a common aterm format allows the downstream
+portions of our workflow to be language-agnostic to a large degree, with
+minimal language-specific parameterization.
 
 \begin{figure}
 \begin{center}
 \includegraphics[height=0.44\textheight]{figures/workflow.pdf}
-\caption{workflow}
+\caption{The workflow of our approach\jason{This should mention weaving somewhere in the figure}}
 \label{fig:workflow}
 \end{center}
 \end{figure}
@@ -75,7 +75,7 @@ The structure of aterms is given by this simple syntax:
 \end{grammar}
 
 This structure is sufficient for us to encode typical abstract syntax trees if
-we allows ourselves to use the string label of the `AAppl' portion of the
+we allow ourselves to use the string label of the {\tt AAppl} portion of the
 aterm. This is most easily illustrated with an example.  Suppose that we have
 the Java AST for the statement {\tt i++;}.  In a textual form, this portion of
 the AST would be represented by:
@@ -87,7 +87,7 @@ ExpStmt
       (Name [Ident "i"])))
 \end{verbatim}
 
-The translation to aterm would give us,
+The translation to aterm would give us:
 
 \begin{verbatim}
 AAppl "ExpStmt"
@@ -115,15 +115,15 @@ yielded tree differencing algorithms analogous to string differencing
 algorithms commonly used in text analysis.  Many modern efforts in this area
 are based on the initial work of Selkow~\cite{selkow77tree} and
 Tai~\cite{tai79tree}.  Interest in such analysis of tree-structured data
-increased with the proliferation of structured document format used on the
-internet such as XML, HTML and SGML~\cite{chawathe96change}.
+increased with the proliferation of structured document formats used on the
+Internet such as XML, HTML and SGML~\cite{chawathe96change}.
 
-Our work based on Yang's source differencing technique~\cite{yang91diff}.
+Our work is based on Yang's source differencing technique~\cite{yang91diff}.
 In this algorithm two trees to be compared are mapped to two trees in which
 nodes are annotated with edit operations (Keep or Delete), which can be applied
 to turn each tree into the other.  These edit trees are then post-processed
 after Yang's algorithm is applied to generate what we call a weave tree.
-
+\jason{the flow between these two sections is awkward. Not sure what to change.}
 \subsection{Weaving structural differences}
 \label{sec:weaving}
 
@@ -137,10 +137,11 @@ modifications, adding nodes, and removing nodes.
 
 To separate the modifications into the different kinds, we consider the type of
 mismatch between the input trees. We refer to the tree before the change as the
-left tree and tree after the change as the right tree. The weave tree joins
+left tree and the tree after the change as the right tree. The weave tree joins
 together the parts of the tree that did not change and has special branches for
-the parts that are different. These special branches come in four varieties:
-left and right mismatches and left and right holes.
+the parts that are different. These special branches come in several varieties:
+left and right mismatches and left and right holes. We will often group left
+and right mismatches into simple mismatches.
 
 Left and right mismatches represent an edit to an existing node of the AST\@.
 A left mismatch represents the change before the edit and the right mismatch
@@ -197,7 +198,7 @@ in the VCS for ANTLR where $\tau = 0.9$.
 \begin{center}
 \includegraphics[width=0.45\textwidth]{figures/distmatrix-0-9.png}
 \caption{Boolean matrix for the ANTLR repository indicating all pairs of
-changes that have similarity greater than or equal to $\tau = 0.9$.}
+changes that have similarity greater than or equal to $\tau = 0.9$.\jason{Please improve the colors.}}
 \label{fig:boolmat}
 \end{center}
 \end{figure}
@@ -213,23 +214,26 @@ is being developed and grown, we expect to see a number of code insertions.
 Similarly, when a mass refactoring occurs to simplify code, we would expect to
 see a set of code deletions.  When a more subtle refinement occurs, such as
 transposition of  code arguments or the addition of a conditional to refine
-control flow, we would expect to see mismatches where the tree changes in a
-way where the structural change can be thought of as a  coupled deletion and
+control flow, we would expect to see mismatches where the tree changes in a way
+where the structural change can be thought of as a  coupled deletion and
 insertion operation (such as changing a variable name in an expression).
+\jason{Point out that even though this matrix is very sparse (and that's a
+problem for most data mining for changes in VCS history, our approach handles
+this like a champ and zooms in on the relevant bits.}
 
 \subsection{Antiunification and template generation}
 
 Once we have groups of related code snippets in the form of related subtrees,
 we can seek patterns that relate changes.  For example, say we have a function
-call $foo()$ where each invocation of the function uses the same parameters
-(e.g, $foo(x,y)$, where $x$ and $y$ are always the same). If we add a new
-parameter at the end of each call where the variable passed in differs each
-time (e.g., $foo(x,y,a)$ and $foo(x,y,b)$), we would like to abstract out this
-change as $foo(x,y,VAR)$, where each instance of the change replaces $VAR$
-with whatever concrete variable is used at that point.  The antiunification
-algorithm is built for this purpose -- given two trees, it seeks the least-
-general generalization of the pair and produces a triplet representing the
-generalized tree with a metavariable introduced where the two differ, as well
-as a substitution set that allows the metavariable to be replaced with the
-appropriate concrete subtree necessary to reconstitute the two trees that were
-antiunified.
+call {\tt foo()} where each invocation of the function uses the same parameters
+(e.g, {\tt foo(x,y)}, where {\tt x} and {\tt y} are always the same). If we add
+a new parameter at the end of each call where the variable passed in differs
+each time (e.g., {\tt foo(x,y,a)} and {\tt foo(x,y,b)}), we would like to
+abstract out this change as {\tt foo(x,y,\metavar)}, where each instance of the
+change replaces \metavar~with whatever concrete variable is used at that point.
+The antiunification algorithm is built for this purpose -- given two trees, it
+seeks the least-general generalization of the pair and produces a triplet
+representing the generalized tree with a metavariable introduced where the two
+differ, as well as a substitution set that allows the metavariable to be
+replaced with the appropriate concrete subtree necessary to reconstitute the
+two trees that were antiunified.
