@@ -11,7 +11,7 @@ to a common aterm format allows the downstream portions of our workflow to be
 language-agnostic to a large degree, with minimal language-specific
 parameterization.
 
-\begin{figure}
+\begin{figure}[htb]
 \begin{center}
 \includegraphics[height=0.44\textheight]{figures/workflow.pdf}
 \caption{The components of our prototype indicating how VCS data is
@@ -98,7 +98,8 @@ AAppl "ExpStmt"
   [AAppl "PostIncrement"
     [AAppl "ExpName"
       [AAppl "Name"
-        [AAppl "Ident" [Appl "\"i\"" []]]]]]
+        [AList
+          [AAppl "Ident" [AAppl "\"i\"" []]]]]]]
 \end{verbatim}
 
 Notice that for strings, such as identifier names, we place double quotes
@@ -236,7 +237,7 @@ of $\tau$ chosen.
 \begin{figure}
 \begin{center}
 \includegraphics[width=0.45\textwidth]{figures/distmatrix-0-9.png}
-\caption{Boolean matrix $D$ for over 500 changes from the ANTLR repository indicating all pairs of
+\caption{Boolean matrix $D$ for over 500 changes from the ANTLR repository indicating in white all pairs of
 changes for $\tau = 0.9$.}
 \label{fig:boolmat}
 \end{center}

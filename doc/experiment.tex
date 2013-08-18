@@ -105,11 +105,11 @@ point where the number of deletions goes from 4 to 5 as the threshold changes
 from 0.35 to 0.36.
 
 The following code, presented in standard style of unified diff, shows a loop
-and the lines that were removed. This example comes from a file named {\tt
-PersistentArrayMap.java}:
+and the lines that were removed. This example comes from a class named {\tt
+PersistentArrayMap}:
 
 %\jason{We should make sure none of these diffs get split over the page boundary}
-
+\newpage
 \begin{java}
  public Object kvreduce(IFn f, Object init){
      for(int i=0;i < array.length;i+=2){
@@ -121,8 +121,8 @@ PersistentArrayMap.java}:
  }
 \end{java}
 
-Given the low threshold, this deletion was considered to be similar to the
-example from {\tt PersistentHashMap.java} below.
+Given the low threshold, this deletion was considered to be similar to the following
+example from {\tt PersistentHashMap}.
 Note that whitespace in most languages is syntactically neutral and curly braces
 are optional for single statement conditional or loop bodies.  As a result,
 the parser used in this work gives the same AST for \verb|if (exp) { stmt; }|

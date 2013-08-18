@@ -1,4 +1,5 @@
-\documentclass{acm_proc_article-sp}
+%\documentclass{acm_proc_article-sp}
+\documentclass{sig-alternate-2013}
 \usepackage{syntax}
 \usepackage{url}
 \usepackage{graphics}
@@ -8,6 +9,24 @@
 \usepackage[scaled]{beramono}
 \usepackage{listings}
 \newcommand{\claim}[1]{#1}
+
+\newfont{\mycrnotice}{ptmr8t at 7pt}
+\newfont{\myconfname}{ptmri8t at 7pt}
+\let\crnotice\mycrnotice%
+\let\confname\myconfname%
+
+\permission{This work is licensed under the Creative Commons Attribution-ShareAlike~3.0
+Unported License (CC BY-SA 3.0). To view a copy of the license,
+visit http://creativecommons.org/licenses/by-sa/3.0/. \\}
+\conferenceinfo{DChanges 2013,}{September 10th, 2013, Florence, Italy.}
+\copyrightetc{ceur-ws.org \the\acmcopyr}
+\crdata{Volume 1008, http://ceur-ws.org/Vol-1008/paper2.pdf }
+
+\clubpenalty=10000 
+\widowpenalty = 10000
+
+
+
 
 \newcommand{\matt}[1]{\todo[inline,color=yellow!8]{#1}}
 \newcommand{\jason}[1]{\todo[inline,color=green!8]{#1}}
@@ -171,6 +190,7 @@ line-by-line, allows us to gain insight into the evolution of software.
 % The following two commands are all you need in the
 % initial runs of your .tex file to
 % produce the bibliography for the citations in your paper.
+\newpage
 \bibliographystyle{abbrv}
 \bibliography{sigproc}  % sigproc.bib is the name of the Bibliography in this case
 % You must have a proper ".bib" file
