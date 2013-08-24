@@ -1,13 +1,14 @@
 %\documentclass{acm_proc_article-sp}
 \documentclass{sig-alternate-2013}
+\usepackage{balance}
 \usepackage{syntax}
-\usepackage{url}
 \usepackage{graphics}
 \usepackage[textsize=footnotesize,bordercolor=black!20]{todonotes}
 \usepackage{microtype}
 \usepackage[T1]{fontenc}
 \usepackage[scaled]{beramono}
 \usepackage{listings}
+\usepackage{url}
 \newcommand{\claim}[1]{#1}
 
 \newfont{\mycrnotice}{ptmr8t at 7pt}
@@ -190,7 +191,7 @@ line-by-line, allows us to gain insight into the evolution of software.
 % The following two commands are all you need in the
 % initial runs of your .tex file to
 % produce the bibliography for the citations in your paper.
-\newpage
+\balance
 \bibliographystyle{abbrv}
 \bibliography{sigproc}  % sigproc.bib is the name of the Bibliography in this case
 % You must have a proper ".bib" file
