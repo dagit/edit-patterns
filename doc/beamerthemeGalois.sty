@@ -1,0 +1,31 @@
+\mode<presentation>
+
+\usefonttheme{Galois}
+\usecolortheme{Galois}
+\useinnertheme{Galois}
+\useoutertheme{Galois}
+
+\titlegraphic{\includegraphics[width=\paperwidth]{galois-first-bg}}
+
+\setbeamertemplate{title page}
+{
+  \begin{centering}
+  {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle}
+
+  \insertauthor~$\mid$~\insertdate
+
+  \end{centering}
+}
+\pgfdeclareimage[height=0.5cm]{galois-logo}{galois-logo}
+\logo{\pgfuseimage{galois-logo}}
+
+\newcommand{\galoistitle}{
+  {
+    \usebackgroundtemplate{\includegraphics[width=\paperwidth]
+      {galois-first-bg.png}}
+    \frame[plain]{\titlepage}
+  }
+}
+
+\mode
+<all>

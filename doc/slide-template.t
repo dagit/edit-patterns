@@ -1,10 +1,6 @@
-\documentclass[$if(fontsize)$$fontsize$,$endif$$if(handout)$handout,$endif$$if(beamer)$ignorenonframetext,$endif$]{$documentclass$}
-$if(theme)$
-\usetheme{$theme$}
-$endif$
-$if(colortheme)$
-\usecolortheme{$colortheme$}
-$endif$
+\documentclass{beamer}
+%\documentclass[$if(fontsize)$$fontsize$,$endif$$if(handout)$handout,$endif$$if(beamer)$ignorenonframetext,$endif$]{$documentclass$}
+\usetheme{Galois}
 \usepackage{amssymb,amsmath}
 \usepackage{ifxetex,ifluatex}
 \usepackage{fixltx2e} % provides \textsubscript
@@ -54,9 +50,7 @@ $endif$
 $if(url)$
 \usepackage{url}
 $endif$
-$if(graphics)$
 \usepackage{graphicx}
-$endif$
 % Comment these out if you don't want a slide with just the
 % part/section/subsection/subsubsection title:
 \AtBeginPart{\frame{\partpage}}
@@ -84,6 +78,7 @@ $endif$
 $for(header-includes)$
 $header-includes$
 $endfor$
+
 
 $if(title)$
 \title{$title$}
@@ -135,9 +130,12 @@ escapeinside={$$}{$$}}
 \newcommand{\metavar}{$$\square$$}
 
 \begin{document}
-$if(title)$
-\frame{\titlepage}
-$endif$
+
+\galoistitle
+
+%$if(title)$
+%\frame{\titlepage}
+%$endif$
 
 $for(include-before)$
 $include-before$

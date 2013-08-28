@@ -2,6 +2,7 @@
 % Jason Dagit ; Matthew Sottile
 % Galois, Inc
 
+
 # Motivation
 
 **Dream Tool:** Finds meaningful patterns in source code and edit history to
@@ -124,7 +125,7 @@ Distance matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
 # Similarity Grouping
 
 \begin{center}
-\includegraphics[width=0.9\textwidth]{figures/distmatrix-0-9.png}
+\includegraphics[width=0.8\textwidth]{figures/distmatrix-0-9.png}
 
 Similarity groups from the ANTLR repository with similarity threshold greater than 0.9
 \end{center}
@@ -222,8 +223,8 @@ for ($\metavar$ = 0; $\metavar$ < $\metavar$.$\metavar$; $\metavar$) {
   * We only consider structural patterns
   * Not semantically aware
 
-#
+# Thank You!
 
 \Large\begin{center}
- Thank you!
+ Questions?
 \end{center}
