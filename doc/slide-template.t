@@ -33,6 +33,7 @@ $if(listings)$
 \usepackage{listings}
 \usepackage{microtype}
 \usepackage{syntax}
+\usepackage{qtree}
 $endif$
 $if(lhs)$
 \lstnewenvironment{code}{\lstset{language=Haskell,basicstyle=\small\ttfamily}}{}
@@ -116,7 +117,7 @@ tabsize=4,
 showspaces=false,
 showstringspaces=false,
 basicstyle=\LSTfont,
-frame=single, 
+%frame=single, 
 captionpos=b,
 escapeinside={$$}{$$}}
 
