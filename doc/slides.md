@@ -14,7 +14,7 @@ support people with the following roles:
 
 # Motivation
 
-## Traditional line-based diff
+Traditional line-based diff
 
 Pro: diff is very general and programming language agnostic
 
@@ -114,11 +114,17 @@ $$
 treediff\left(\raisebox{1.5em}{\Tree[.A [.B ] [.C ]]},\raisebox{1.5em}{\Tree[.A [.B [.D ] ] [.F ]]}\right) = \raisebox{1.5em}{\Tree[.A [.B [.lefthole(D) ] ] [.mismatch(C,F) ]]}
 $$
 
+Keep just the differences with a bit of context:
+$$
+t_a = \raisebox{1em}{\Tree[.A [.mismatch(C,F) ]]} \hspace{2em} t_b = \raisebox{1em}{\Tree[.B [.lefthole(D) ] ] }
+$$
+
 # Similarity Grouping
 
 We define the similarity score by:
 
-$$\Delta(t_a, t_b) := \frac{min(treediff(t_a, t_b),treediff(t_b, t_a))}{max(|t_a|,|t_b|)}$$
+$$\Delta(t_a, t_b) := \frac{min(d(t_a, t_b),d(t_b, t_a))}{max(|t_a|,|t_b|)}$$
+where $d$ is the tree edit distance score.
 
 Distance matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
 
@@ -152,13 +158,13 @@ Number of additions, deletions, and modifications by threshold for the ANTLR sou
 
 $$
 au\left(\raisebox{1.5em}{\Tree[.A [.B ] [.C ]]},\raisebox{1.5em}{\Tree[.A [.B [.D ]] [.F ]]}\right)
-  = \left(\raisebox{1em}{\Tree[.A [.?_1 ] [.?_2 ]]},subst_l ,subst_r \right)
+  = \left(\raisebox{1em}{\Tree[.A [.\metavar_1 ] [.\metavar_2 ]]},subst_l ,subst_r \right)
 $$
 
 where,
 \begin{align*}
-subst_l &= \{?_1 := B, ?_2 := C\} \\
-subst_r &= \{?_1 := \raisebox{0.5em}{\Tree[.B [.F ]]}, ?_2 := F\}
+subst_l &= \{\square_1 \mapsto B, \square_2 \mapsto C\} \\
+subst_r &= \{\square_1 \mapsto \raisebox{0.5em}{\Tree[.B [.F ]]}, \square_2 \mapsto F\}
 \end{align*}
 
 # Patterns as a function of threshold
