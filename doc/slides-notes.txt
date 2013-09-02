@@ -1,9 +1,6 @@
 1. In the manager example: Say that we don't want to rely on programmers to
 tell the story, instead let the revision history tell the story.
 
-2. Get rid of the adjacency matrix. Replace it with an example group of trees
-that comes from a specific threshold.
-
 3. Mention $\tau$ and how we fix the similarity metric while varying $\tau$.
 
 6. Get rid of language designer arguments, focus on: people who need to understand changes
@@ -44,6 +41,9 @@ That's all I have.  I liked the talk. The tool looks very useful.  Personally, I
 
 
 -- Done
+
+2. Get rid of the adjacency matrix. Replace it with an example group of trees
+that comes from a specific threshold.
 
 4. Typo: argument instead of arugment
 

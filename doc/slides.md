@@ -100,11 +100,72 @@ Distance matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
 
 # Similarity Grouping
 
-\begin{center}
-\includegraphics[width=0.8\textwidth]{figures/distmatrix-0-9.png}
+10 similarity groups from ANTLR source, when $\tau = 0.01$:
 
-Similarity groups from the ANTLR repository with similarity threshold greater than 0.9
-\end{center}
+7 are patterns:
+
+```
+$\metavar$;
+```
+
+```
+if( $\metavar$ ) $\metavar$;
+```
+
+```
+if( $\metavar$ ) { $\metavar$ } $\metavar$;
+```
+
+```
+return $\metavar$;
+```
+
+```
+for( $\metavar$ $\metavar$ : $\metavar$ ) $\metavar$;
+```
+
+```
+for( int $\metavar$ = $\metavar$; $\metavar$ < $\metavar$; $\metavar$) $\metavar$;
+```
+
+```
+throw RuntimeException( $\metavar$ + $\metavar$ );
+```
+
+# Similarity Grouping (cont.)
+
+3 are concrete:
+
+
+```
+try {
+  walker.grammarSpec();
+} catch (RecognitionException re){
+  ErrorManager.internalError("bad grammar AST structure",re);
+}
+```
+
+```
+while(sp !=
+      StackLimitedNFAToDFAConverter.NFA_EMPTY_STACK_CONTEXT)
+{
+  n++;
+  sp = sp.parent;
+}
+```
+
+```
+switch(gtype) {
+  case ANTLRParser.LEXER_GRAMMAR:
+    return legalLexerOptions.contains(key);
+  case ANTLRParser.PARSER_GRAMMAR:
+    return legalParserOptions.contains(key);
+  case ANTLRParser.TREE_GRAMMAR:
+    return legalTreeParserOptions.contains(key);
+  default:
+    return legalParserOptions.contains(key);
+}
+```
 
 # Clojure
 
@@ -245,3 +306,10 @@ such information
 * Generic tree structure
 * Easy to modify parsers to generate ATerms
 
+# Similarity Grouping
+
+\begin{center}
+\includegraphics[width=0.8\textwidth]{figures/distmatrix-0-9.png}
+
+Similarity groups from the ANTLR repository with similarity threshold greater than 0.9
+\end{center}
