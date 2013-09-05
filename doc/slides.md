@@ -7,11 +7,15 @@
 
 Tools to detect changes exist.
 
+\vspace{2em}
+
 We need tools for interpreting changes.
 
 # Motivation
 
 What can we learn from patterns?
+
+\vspace{1em}
 
 Common looping pattern with loop counter initialized to zero:
 
@@ -21,11 +25,13 @@ for ($\metavar$ = 0; $\metavar$ < $\metavar$; $\metavar$) {
 }
 ```
 
-Highlights language features that get used together.
+\vspace{1em}
 
 We also want to see how source code *changes*.
 
 # Example from Clojure: Related edits
+
+\Small Our tool found these related edits:
 
 `PersistentArrayMap.java`
 
@@ -39,6 +45,8 @@ We also want to see how source code *changes*.
      return init;
  }
 ```
+
+\hrule
 
 `PersistentHashMap.java`
 
@@ -78,7 +86,7 @@ similar* difference trees.
 
 \end{center}
 
-# Structural Diff Example
+# Structural diff
 
 $$
 treediff\left(\;\raisebox{1.5em}{\Tree[.A [.B ] [.C ]]}\quad,\quad\raisebox{1.5em}{\Tree[.A [.B [.D ] ] [.F ]]}\;\right) = \raisebox{1.5em}{\Tree[.A [.B [.lefthole(D) ] ] [.mismatch(C,F) ]]}
@@ -89,7 +97,17 @@ $$
 t_a = \raisebox{1em}{\Tree[.A [.mismatch(C,F) ]]} \hspace{2em} t_b = \raisebox{1em}{\Tree[.B [.lefthole(D) ] ] }
 $$
 
-# Similarity Grouping
+Output also gives us an edit distance.
+
+# Workflow
+
+\begin{center}
+
+  \includegraphics[height=0.8\textheight]{figures/workflow.pdf}
+
+\end{center}
+
+# Similarity grouping
 
 We define the similarity score by:
 
@@ -97,45 +115,49 @@ $$\Delta(t_a, t_b) := \frac{min(d(t_a, t_b),d(t_b, t_a))}{max(|t_a|,|t_b|)}$$
 where $d$ is the tree edit distance score.
 
 Distance matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
+\vspace{2em}
+Given threshold $\tau \in [0,1]$ we say $t_i$ and $t_j$ are similar if $D_{ij}
+\ge \tau$.
 
-# Similarity Grouping
+Group into clusters such that all cluster elements are within $\tau$.
+
+# ANTLR similarity groups with $\tau = 0.01$
 
 10 similarity groups from ANTLR source, when $\tau = 0.01$:
 
 7 are patterns:
 
 ```
-$\metavar$;
+    $\metavar$;
 ```
 
 ```
-if( $\metavar$ ) $\metavar$;
+    if( $\metavar$ ) $\metavar$;
 ```
 
 ```
-if( $\metavar$ ) { $\metavar$ } $\metavar$;
+    if( $\metavar$ ) { $\metavar$ } $\metavar$;
 ```
 
 ```
-return $\metavar$;
+    return $\metavar$;
 ```
 
 ```
-for( $\metavar$ $\metavar$ : $\metavar$ ) $\metavar$;
+    for( $\metavar$ $\metavar$ : $\metavar$ ) $\metavar$;
 ```
 
 ```
-for( int $\metavar$ = $\metavar$; $\metavar$ < $\metavar$; $\metavar$) $\metavar$;
+    for( int $\metavar$ = $\metavar$; $\metavar$ < $\metavar$; $\metavar$ ) $\metavar$;
 ```
 
 ```
-throw RuntimeException( $\metavar$ + $\metavar$ );
+    throw RuntimeException( $\metavar$ + $\metavar$ );
 ```
 
-# Similarity Grouping (cont.)
+# ANTLR similarity groups with $\tau = 0.01$
 
-3 are concrete:
-
+3 are constants (no \metavar s):
 
 ```
 try {
@@ -145,6 +167,8 @@ try {
 }
 ```
 
+\hrule
+
 ```
 while(sp !=
       StackLimitedNFAToDFAConverter.NFA_EMPTY_STACK_CONTEXT)
@@ -153,6 +177,8 @@ while(sp !=
   sp = sp.parent;
 }
 ```
+
+\hrule
 
 ```
 switch(gtype) {
@@ -167,7 +193,7 @@ switch(gtype) {
 }
 ```
 
-# Clojure
+# Similarity groups versus threshold
 
 \begin{center}
 \includegraphics[width=\textwidth]{figures/clojure-number-of-modifications.pdf}
@@ -176,8 +202,16 @@ switch(gtype) {
 Number of additions, deletions, and modifications by threshold for the Clojure source.
 \end{center}
 
+# Workflow
 
-# Antiunification Example
+\begin{center}
+
+  \includegraphics[height=0.8\textheight]{figures/workflow.pdf}
+
+\end{center}
+
+
+# Antiunification
 
 $$
 au\left(\;\raisebox{1.5em}{\Tree[.A [.B ] [.C ]]}\quad,\quad\raisebox{1.5em}{\Tree[.A [.B [.D ]] [.F ]]}\;\right)
@@ -216,22 +250,22 @@ for ($\metavar$ = 0; $\metavar$ < $\metavar$.$\metavar$; $\metavar$) {
 }
 ```
 
-# Future Work
+# Future work
 
   * We only consider structural patterns
   * Not semantically aware
 
-# Thank You!
+# Thank you!
 
-\Large\begin{center}
- Questions?
+\begin{center}
+\Large Questions?
 \end{center}
-
-\small
+\vspace{2em}
+\tiny\emph{
 This work was supported in part by the US Department
 of Energy Office of Science, Advanced Scientic Computing
 Research contract no. DE-SC0004968. Additional support
-was provided by Galois, Inc.
+was provided by Galois, Inc.}
 
 # Banished
 
