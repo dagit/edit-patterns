@@ -1,5 +1,5 @@
 % Identifying change patterns in software history
-% Jason Dagit ; Matthew Sottile
+% Jason Dagit
 % Galois, Inc
 
 
@@ -9,13 +9,25 @@ Tools to detect changes exist.
 
 \vspace{2em}
 
+For example, traditional line-based diff:
+
+* Pro: diff is very general and programming language agnostic
+
+* Con: diff is not structurally aware:
+
+```
+       if( foo ){           if( foo )
+         bar;               {
+       }                      bar;
+                            }
+```
+
+\vspace{2em}
+
 We need tools for interpreting changes.
 
+
 # Motivation
-
-What can we learn from patterns?
-
-\vspace{1em}
 
 Common looping pattern with loop counter initialized to zero:
 
@@ -76,7 +88,7 @@ similar* difference trees.
 
   * Similarity is measured using a tree edit distance score
 
-  * Generalization is accomplished through antiunification
+  * Generalization is accomplished through *antiunification*
 
 # Workflow
 
@@ -85,6 +97,31 @@ similar* difference trees.
   \includegraphics[height=0.8\textheight]{figures/workflow.pdf}
 
 \end{center}
+
+# ATerms
+
+```
+i++;
+```
+
+\hrule
+
+\begin{verbatim}
+AAppl "ExpStmt"
+  [AAppl "PostIncrement"
+    [AAppl "ExpName"
+      [AAppl "Name"
+        [AList
+          [AAppl "Ident" [AAppl "\"i\"" []]]]]]]
+\end{verbatim}
+
+\vspace{1em}
+
+Generic tree structure---programming language agnostic.
+
+\vspace{1em}
+
+Easy to modify parsers to generate ATerms.
 
 # Structural diff
 
@@ -114,12 +151,12 @@ We define the similarity score by:
 $$\Delta(t_a, t_b) := \frac{min(d(t_a, t_b),d(t_b, t_a))}{max(|t_a|,|t_b|)}$$
 where $d$ is the tree edit distance score.
 
-Distance matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
+Similarity matrix $D$ given by $D_{ij} = \Delta(t_i, t_j)$.
 \vspace{2em}
 Given threshold $\tau \in [0,1]$ we say $t_i$ and $t_j$ are similar if $D_{ij}
 \ge \tau$.
 
-Group into clusters such that all cluster elements are within $\tau$.
+Group trees such that all elements in the group are within $\tau$.
 
 # ANTLR similarity groups with $\tau = 0.01$
 
@@ -148,7 +185,7 @@ Group into clusters such that all cluster elements are within $\tau$.
 ```
 
 ```
-    for( int $\metavar$ = $\metavar$; $\metavar$ < $\metavar$; $\metavar$ ) $\metavar$;
+    for( $\metavar$ = $\metavar$; $\metavar$ < $\metavar$; $\metavar$ ) $\metavar$;
 ```
 
 ```
@@ -193,15 +230,6 @@ switch(gtype) {
 }
 ```
 
-# Similarity groups versus threshold
-
-\begin{center}
-\includegraphics[width=\textwidth]{figures/clojure-number-of-modifications.pdf}
-
-
-Number of additions, deletions, and modifications by threshold for the Clojure source.
-\end{center}
-
 # Workflow
 
 \begin{center}
@@ -223,6 +251,17 @@ where,
 subst_l &= \{\square_1 \mapsto B\;,\; \square_2 \mapsto C\} \\\\
 subst_r &= \{\square_1 \mapsto \raisebox{0.5em}{\Tree[.B [.D ]]}\;,\; \square_2 \mapsto F\}
 \end{align*}
+
+# Similarity groups versus threshold
+
+What happens to similarity groups when we vary the threshold?
+
+\begin{center}
+\includegraphics[width=0.9\textwidth]{figures/clojure-number-of-modifications.pdf}
+
+
+Number of additions, deletions, and modifications by threshold for the Clojure source.
+\end{center}
 
 # Patterns as a function of threshold
 
@@ -253,7 +292,16 @@ for ($\metavar$ = 0; $\metavar$ < $\metavar$.$\metavar$; $\metavar$) {
 # Future work
 
   * We only consider structural patterns
+
+      * Example: We don't detect design patterns
+
   * Not semantically aware
+
+      * Example: changing the name of a loop variable leads to \metavar
+
+  * Generate rewrite rules based on before and after patterns
+  * Use patterns for searching as a structural `grep`-like mechanism
+  * Correlate patterns with bug fixes
 
 # Thank you!
 
@@ -267,23 +315,8 @@ of Energy Office of Science, Advanced Scientic Computing
 Research contract no. DE-SC0004968. Additional support
 was provided by Galois, Inc.}
 
-# Banished
+# 
 
-
-# Motivation
-
-Traditional line-based diff
-
-Pro: diff is very general and programming language agnostic
-
-Con: diff is not structurally aware:
-
-```
-if( foo ){           if( foo )
-  bar;               {
-}                      bar;
-                     }
-```
 
 # Motivation
 
@@ -324,21 +357,6 @@ change
 
   * *Only* a heuristic argument, but humans are good at working with
 such information
-
-# ATerms
-
-\setlength{\grammarindent}{8em}
-\begin{grammar}
-<aterm> ::= `AAppl' $\langle$string$\rangle$ $\langle$aterm-list$\rangle$
-\alt `AList' $\langle$aterm-list$\rangle$
-\alt `AInt' $\langle$int$\rangle$
-
-<aterm-list> ::= $\langle$aterm$\rangle$ $\langle$aterm-list$\rangle$
-\alt $\epsilon$
-\end{grammar}
-
-* Generic tree structure
-* Easy to modify parsers to generate ATerms
 
 # Similarity Grouping
 
