@@ -36,7 +36,6 @@ executable edit-patterns
                      , vector
   hs-source-dirs:      .
                      , src
-  c-sources: cbits/mult.c
 
   ghc-options: -Wall -O2
   ghc-prof-options: -fprof-auto -prof -rtsopts
