@@ -18,7 +18,7 @@ You will need:
   * A git repository containing Java source code
   * graphviz
   * Haskell (tested with GHC 7.6.3)
-  * tree-utils from COMPOSE-HPC: https://sourceforge.net/p/compose-hpc/code/ci/master/tree/rote/tree-utils/
+  * tree-utils from COMPOSE-HPC: https://sourceforge.net/projects/compose-hpc/files/ROTE/
 
 How to use the tool
 -------------------
