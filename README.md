@@ -3,6 +3,10 @@ Edit Patterns
 
 You can find the details of our experiment here: http://arxiv.org/abs/1307.1719
 
+This work was supported in part by the US Department of Energy Office of
+Science, Advanced Scientic Computing Research contract no. DE-SC0004968.
+Additional support was provided by Galois, Inc.
+
 Overview
 --------
 
