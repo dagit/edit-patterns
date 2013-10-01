@@ -6,7 +6,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Jason Dagit
 maintainer:          dagit@galois.com
--- copyright:           
+copyright:           Galois, Inc 2013
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.8

@@ -77,7 +77,7 @@ data Mode
 defaultOptions :: Options
 defaultOptions = Options
   { optVerbose    = False
-  , optSandbox    = "/tmp/dagit/version-patterns"
+  , optSandbox    = "/tmp/version-patterns"
   , optMode       = GenerateATerms
   , optThreshold  = 0
   , optNumChanges = 100
@@ -254,41 +254,6 @@ generateTerms sandbox = do
     archive'' <- saveATerms archive' first  diffArgs
     saveATerms archive'' second diffArgs
 
--- | src2term runs the ROSE program by the same name over the input file,
--- saves the output to a temp file, reads it back in, deletes the temp file
--- and returns the string version.
--- NOTE: We can't just read it from stdout because ROSE dumps warnings there
--- and later we may not be able to parse it.
-{-
-src2term :: FilePath -> FilePath -> Sh (B.ByteString)
-src2term from to = do
-  -- TODO: remove this hardcode path
-  -- TODO: take the include list and some of these other paths via command line
-  -- or other configuration file
-  -- For whatever reason, this gcc command gives us an extra newline that is
-  -- troublesome, ergo this hack:
-  let destFile = "/tmp" </> filename to
-  void (run "/home/dagit/ftt/rose/compileTree/bin/src2term"
-                [ "--aterm", toTextIgnore from, "-o", toTextIgnore destFile
-                , "-Iinclude"
-                , "-Iinclude/freetype"
-                , "-Iinclude/freetype/config"
-                , "-Iinclude/freetype/internal"
-                , "-Isrc/base"
-                , "-Isrc/shared"
-                , "-Isrc/shared/otlayout"
-                , "-Isrc/sfnt"
-                , "-Isrc/psnames"
-                , "-Isrc/type1z"
-                , "-Isrc/otlayout"
-                , "-Isrc/truetype"
-                , "-Iconfig/unix"
-                ])
-  -- read the file in so we can add it to the archive
-  bs <- liftIO (B.readFile (T.unpack (toTextIgnore destFile)))
-  rm destFile
-  return bs
--}
 src2term :: FilePath -> Sh ATermTable
 src2term from = do
   cs <- liftIO (readFile (T.unpack (toTextIgnore from)))
